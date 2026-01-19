@@ -1,22 +1,65 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Wrench, Archive, Plus, Save, MoreHorizontal, Upload, ChevronDown, Activity, Droplets, Trash2, Calendar, FileText, Download, Info, X, TrendingDown, Bell } from 'lucide-react';
+import { Wrench, Archive, Plus, Save, Upload, Activity, Droplets, Trash2, Calendar, FileText, Download, Info, X, TrendingDown, Bell, ChevronDown } from 'lucide-react';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+
+// --- FIREBASE SETUP ---
+// Dina nycklar för produktion (GitHub Pages etc.)
+const userFirebaseConfig = {
+  apiKey: "AIzaSyDGmN-60JoFMFyKNtEVR4sRf258GTv2jU4",
+  authDomain: "mjodbryggning.firebaseapp.com",
+  projectId: "mjodbryggning",
+  storageBucket: "mjodbryggning.firebasestorage.app",
+  messagingSenderId: "795065616004",
+  appId: "1:795065616004:web:27f329729112c0f09fa4d1",
+  measurementId: "G-1GDMF1NNQ4"
+};
+
+// Logik för att välja rätt konfiguration
+// 1. Om vi är i Canvas/Förhandsgranskning: Använd miljöns config (__firebase_config)
+// 2. Annars (t.ex. GitHub Pages): Använd dina hårdkodade nycklar (userFirebaseConfig)
+let firebaseConfig;
+if (typeof __firebase_config !== 'undefined') {
+  try {
+    firebaseConfig = JSON.parse(__firebase_config);
+  } catch (e) {
+    firebaseConfig = userFirebaseConfig;
+  }
+} else {
+  firebaseConfig = userFirebaseConfig;
+}
+
+// Initiera Firebase säkert (Singleton pattern)
+let app;
+if (getApps().length === 0) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApp();
+}
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Använd ett fast ID för appen om inte miljön anger ett
+const appId = typeof __app_id !== 'undefined' ? __app_id : "mjodbryggning-live";
 
 export default function App() {
-  // --- STATE FÖR DATAN I VERKTYGEN ---
+  // --- STATE ---
+  const [user, setUser] = useState(null);
   const [currentBatchId, setCurrentBatchId] = useState(null);
   const [showInfo, setShowInfo] = useState(false); 
   
-  // State för att hantera radering av batcher (ersätter window.confirm)
+  // Radering & Påminnelser
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [batchToDelete, setBatchToDelete] = useState(null);
-
-  // State för påminnelse-meny
   const [showReminderMenu, setShowReminderMenu] = useState(false);
-  const [reminderType, setReminderType] = useState('measure'); // Default val
+  const [reminderType, setReminderType] = useState('measure');
 
-  // State för validering
+  // Validering
   const [nameError, setNameError] = useState(false);
   
+  // Datafält
   const [batchName, setBatchName] = useState('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [ingredients, setIngredients] = useState('');
@@ -31,6 +74,53 @@ export default function App() {
   const [savedBatches, setSavedBatches] = useState([]);
 
   const fileInputRef = useRef(null);
+
+  // --- FIREBASE AUTHENTICATION ---
+  useEffect(() => {
+    const initAuth = async () => {
+      // Prioritera custom token om den finns (Canvas miljö)
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        try {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } catch (e) {
+          console.warn("Custom token auth failed, falling back to anonymous", e);
+          await signInAnonymously(auth);
+        }
+      } else {
+        // Annars (GitHub Pages) kör anonymt
+        await signInAnonymously(auth).catch((error) => {
+           console.error("Inloggning misslyckades", error);
+        });
+      }
+    };
+    initAuth();
+    
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // --- FIREBASE DATA SYNC ---
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      collection(db, 'artifacts', appId, 'users', user.uid, 'batches'),
+      (snapshot) => {
+        const batches = snapshot.docs.map(doc => ({ 
+          id: parseInt(doc.id), 
+          ...doc.data() 
+        }));
+        setSavedBatches(batches.sort((a, b) => b.id - a.id));
+      },
+      (error) => {
+        console.error("Kunde inte hämta batcher:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
 
   // --- BERÄKNINGSFUNKTIONER ---
   
@@ -66,15 +156,12 @@ export default function App() {
     return Math.max(0, Math.min(100, att)).toFixed(1);
   };
 
-  // Helper för att räkna dagar sedan start
   const getDaysSince = (dateString) => {
     if (!dateString) return 0;
     const start = new Date(dateString);
     const today = new Date();
-    // Nollställ tid för att jämföra rena datum (midnatt till midnatt)
     start.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
-    
     const diffTime = today.getTime() - start.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     return Math.max(0, diffDays);
@@ -95,29 +182,24 @@ export default function App() {
   const attenuation = calculateAttenuation();
   const sweetness = getSweetnessStatus();
 
-  // --- GRAF-DATA PARSNING ---
+  // --- GRAF-DATA ---
   const getGraphData = () => {
     const dataPoints = [];
     
-    // 1. Lägg till Startpunkten (OG)
     if (og > 0 && startDate) {
       dataPoints.push({
         date: new Date(startDate).getTime(),
-        displayDate: startDate.substring(5), // MM-DD
+        displayDate: startDate.substring(5),
         value: parseFloat(og),
         type: 'start'
       });
     }
 
-    // 2. Parsa Loggen med Regex
-    // Letar efter formatet: - YYYY/MM/DD: Siffror °Oe
     const regex = /- (\d{4}\/\d{2}\/\d{2}):\s*(-?\d+)\s*°Oe/g;
     let match;
     while ((match = regex.exec(log)) !== null) {
-      const dateStr = match[1].replace(/\//g, '-'); // Konvertera / till - för Date parsing
+      const dateStr = match[1].replace(/\//g, '-');
       const val = parseFloat(match[2]);
-      
-      // Undvik ogiltiga datum eller värden
       if (!isNaN(val)) {
         dataPoints.push({
           date: new Date(dateStr).getTime(),
@@ -127,14 +209,12 @@ export default function App() {
         });
       }
     }
-
-    // Sortera på datum
     return dataPoints.sort((a, b) => a.date - b.date);
   };
 
   const graphData = getGraphData();
 
-  // --- HANTERA LOGG & PÅMINNELSE ---
+  // --- LOGG & PÅMINNELSE ---
 
   const handleAddLogEntry = () => {
     const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
@@ -165,17 +245,14 @@ export default function App() {
   const handleCreateReminder = (days) => {
     const date = new Date();
     date.setDate(date.getDate() + days);
-    // Sätt tid till 18:00
     date.setHours(18, 0, 0, 0);
     
-    // Format YYYYMMDDTHHMMSS för ICS (Lokal tid, ingen tidszonsspecifikation "Floating time")
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = String(date.getSeconds()).padStart(2, '0');
-    
     const dateStr = `${year}${month}${day}T${hours}${minutes}${seconds}`;
     
     const cleanName = batchName.trim() || 'Mjöd';
@@ -206,7 +283,6 @@ export default function App() {
     setShowReminderMenu(false);
   };
 
-  // --- TESTDATA FUNKTION ---
   const handleFillTestData = () => {
     setBatchName("Testmjöd (Viking Blod)");
     const today = new Date();
@@ -244,13 +320,18 @@ export default function App() {
     setNameError(false);
   };
 
-  // --- HANTERA SPARANDE, LADDNING, IMPORT & EXPORT ---
+  // --- CRUD OPERATIONS ---
 
-  const handleSaveBatch = () => {
+  const handleSaveBatch = async () => {
     if (!batchName.trim()) {
       setNameError(true); 
       return;
     }
+    if (!user) {
+        alert("Du är inte ansluten till databasen än. Vänta lite...");
+        return;
+    }
+
     setNameError(false);
 
     const batchData = {
@@ -265,21 +346,19 @@ export default function App() {
       fgTemp
     };
 
-    if (currentBatchId) {
-      const updatedBatches = savedBatches.map(batch => 
-        batch.id === currentBatchId 
-          ? { ...batch, ...batchData }
-          : batch
-      );
-      setSavedBatches(updatedBatches);
-    } else {
-      const newId = Date.now();
-      const newBatch = {
-        id: newId,
-        ...batchData
-      };
-      setSavedBatches([newBatch, ...savedBatches]);
-      setCurrentBatchId(newId);
+    try {
+      if (currentBatchId) {
+        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'batches', currentBatchId.toString());
+        await setDoc(docRef, batchData, { merge: true });
+      } else {
+        const newId = Date.now();
+        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'batches', newId.toString());
+        await setDoc(docRef, batchData);
+        setCurrentBatchId(newId);
+      }
+    } catch (error) {
+      console.error("Fel vid sparande:", error);
+      alert("Kunde inte spara till molnet.");
     }
   };
 
@@ -315,14 +394,21 @@ export default function App() {
     setShowDeleteModal(true);
   };
 
-  const confirmDeleteBatch = () => {
-    if (batchToDelete) {
-      setSavedBatches(savedBatches.filter(batch => batch.id !== batchToDelete));
-      if (currentBatchId === batchToDelete) {
-        handleNewBatch();
+  const confirmDeleteBatch = async () => {
+    if (batchToDelete && user) {
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'batches', batchToDelete.toString());
+        await deleteDoc(docRef);
+        
+        if (currentBatchId === batchToDelete) {
+          handleNewBatch();
+        }
+        setShowDeleteModal(false);
+        setBatchToDelete(null);
+      } catch (error) {
+        console.error("Fel vid radering:", error);
+        alert("Kunde inte ta bort batchen.");
       }
-      setShowDeleteModal(false);
-      setBatchToDelete(null);
     }
   };
 
@@ -352,18 +438,28 @@ export default function App() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
-        if (Array.isArray(importedData)) {
+        if (Array.isArray(importedData) && user) {
+            let importCount = 0;
             const existingIds = new Set(savedBatches.map(b => b.id));
-            const newUniqueBatches = importedData.filter(b => !existingIds.has(b.id));
-            if (newUniqueBatches.length > 0) {
-                setSavedBatches(prev => [...newUniqueBatches, ...prev]);
+            
+            for (const batch of importedData) {
+              if (!existingIds.has(batch.id)) {
+                const newId = Date.now() + Math.floor(Math.random() * 10000); 
+                const { id, ...dataToSave } = batch;
+                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'batches', newId.toString());
+                await setDoc(docRef, dataToSave);
+                importCount++;
+              }
             }
+            if (importCount > 0) alert(`Lyckades importera ${importCount} batcher till molnet!`);
+            else alert("Inga nya batcher hittades.");
         }
       } catch (error) {
         console.error("Import error", error);
+        alert("Något gick fel vid importen.");
       }
     };
     reader.readAsText(file);
@@ -384,7 +480,7 @@ export default function App() {
               <h3 className="text-lg font-bold">Ta bort batch?</h3>
             </div>
             <p className="text-slate-300 text-sm mb-6 leading-relaxed">
-              Är du säker på att du vill ta bort denna batch? Detta går inte att ångra.
+              Är du säker på att du vill ta bort denna batch? Detta går inte att ångra och den raderas från molnet.
             </p>
             <div className="flex gap-3 justify-end">
               <button 
@@ -418,10 +514,10 @@ export default function App() {
               </button>
             </div>
             <div className="p-6 text-slate-300 space-y-6 text-sm leading-relaxed">
-              
               <section>
                 <h3 className="text-orange-200 font-bold uppercase tracking-wider mb-3 text-xs border-b border-slate-700 pb-1">Hur man använder appen</h3>
                 <ul className="list-disc pl-5 space-y-2">
+                  <li><strong className="text-orange-100">Molnlagring:</strong> Dina batcher sparas nu automatiskt i molnet (Firebase) när du klickar på "Spara". Du kan komma åt dem från vilken enhet som helst om du använder samma inloggning.</li>
                   <li><strong className="text-orange-100">Verktyg (Vänster):</strong> Här matar du in all data. Fyll i namn, datum, ingredienser och mätvärden.</li>
                   <li><strong className="text-orange-100">Original Gravity (OG):</strong> Ditt mätvärde precis innan jäsningen startar. Detta avgör hur starkt mjödet kan bli.</li>
                   <li><strong className="text-orange-100">Aktuell / Final Gravity (FG):</strong> Ditt mätvärde under eller efter jäsning. Detta visar hur mycket socker som finns kvar.</li>
@@ -432,72 +528,42 @@ export default function App() {
                   <li><strong className="text-orange-100">Backup:</strong> Använd "Exportera" för att ladda ner alla dina batcher till en fil. Använd "Importera" för att ladda upp dem igen.</li>
                 </ul>
               </section>
-
               <section>
                 <h3 className="text-orange-200 font-bold uppercase tracking-wider mb-3 text-xs border-b border-slate-700 pb-1">Bryggprocessen & Begrepp</h3>
                 <div className="space-y-4">
                   <div>
                     <strong className="text-orange-100 block mb-1">Primärjäsning (Stormjäsning)</strong>
-                    <p>
-                      Det första steget där jästen är som mest aktiv och aggressiv. Socker omvandlas till alkohol och kolsyra i hög takt. Det bubblar ofta kraftigt i jäsröret och skum bildas (krausen). Denna fas tar vanligtvis 2-4 veckor beroende på jäst och temperatur.
-                    </p>
+                    <p>Det första steget där jästen är som mest aktiv och aggressiv. Socker omvandlas till alkohol och kolsyra i hög takt. Det bubblar ofta kraftigt i jäsröret och skum bildas (krausen). Denna fas tar vanligtvis 2-4 veckor beroende på jäst och temperatur.</p>
                   </div>
-                  
                   <div>
                     <strong className="text-orange-100 block mb-1">Omtappning (Rackning) & Sekundärjäsning</strong>
-                    <p>
-                      När det slutat bubbla aktivt och bottensatsen (död jäst och partiklar) har lagt sig, tappar man om ("rackar") mjödet till ett nytt, rent kärl. Syftet är att få bort mjödet från bottensatsen för att undvika bismaker och låta det mogna och klarna i lugn och ro.
-                    </p>
+                    <p>När det slutat bubbla aktivt och bottensatsen (död jäst och partiklar) har lagt sig, tappar man om ("rackar") mjödet till ett nytt, rent kärl. Syftet är att få bort mjödet från bottensatsen för att undvika bismaker och låta det mogna och klarna i lugn och ro.</p>
                   </div>
-
                   <div>
                     <strong className="text-orange-100 block mb-1">Klarning (t.ex. Bentonit)</strong>
-                    <p>
-                      För att få ett kristallklart mjöd snabbare kan man använda klarningsmedel. <em>Bentonit</em> är en naturlig lera som binder till sig proteiner och partiklar, vilket gör att de blir tunga och sjunker till botten. Det kan tillsättas redan vid start eller vid omtappning.
-                    </p>
+                    <p>För att få ett kristallklart mjöd snabbare kan man använda klarningsmedel. <em>Bentonit</em> är en naturlig lera som binder till sig proteiner och partiklar, vilket gör att de blir tunga och sjunker till botten. Det kan tillsättas redan vid start eller vid omtappning.</p>
                   </div>
-
                   <div>
                     <strong className="text-orange-100 block mb-1">Jäs-stopp (Stabilisering)</strong>
-                    <p>
-                      Om du vill eftersöta ditt mjöd med mer honung utan att jäsningen startar igång igen (vilket kan skapa "flaskbomber"), måste du stabilisera det. Detta görs vanligen kemiskt genom att tillsätta <em>Kaliumsorbat</em> (hindrar jästförökning) och <em>Kaliumdisulfit</em> (dödar bakterier och skyddar mot oxidation). Vänta minst 24h efter tillsats innan du eftersötar.
-                    </p>
+                    <p>Om du vill eftersöta ditt mjöd med mer honung utan att jäsningen startar igång igen (vilket kan skapa "flaskbomber"), måste du stabilisera det. Detta görs vanligen kemiskt genom att tillsätta <em>Kaliumsorbat</em> (hindrar jästförökning) och <em>Kaliumdisulfit</em> (dödar bakterier och skyddar mot oxidation). Vänta minst 24h efter tillsats innan du eftersötar.</p>
                   </div>
                 </div>
               </section>
-
               <section>
                 <h3 className="text-orange-200 font-bold uppercase tracking-wider mb-3 text-xs border-b border-slate-700 pb-1">Att mäta Öchsle (°Oe)</h3>
                 <div className="space-y-3">
-                  <p>
-                    Öchsle är en enhet för att mäta densiteten (vikt per volym) på din must. Det görs oftast med en <strong>hydrometer</strong>.
-                  </p>
+                  <p>Öchsle är en enhet för att mäta densiteten (vikt per volym) på din must. Det görs oftast med en <strong>hydrometer</strong>.</p>
                   <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
                     <ul className="space-y-2">
-                      <li className="flex gap-3">
-                        <span className="font-bold text-orange-400">1.</span>
-                        <span>Fyll ett mätglas med din vätska (vört/must). Se till att det inte är för mycket skum.</span>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="font-bold text-orange-400">2.</span>
-                        <span>Sänk försiktigt ner hydrometern och snurra den lite för att bli av med luftbubblor.</span>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="font-bold text-orange-400">3.</span>
-                        <span>Läs av värdet precis vid vätskans yta.</span>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="font-bold text-orange-400">4.</span>
-                        <span>Mät vätskans temperatur. Om den inte är 20°C, skriv in temperaturen i appen så korrigeras värdet automatiskt.</span>
-                      </li>
+                      <li className="flex gap-3"><span className="font-bold text-orange-400">1.</span><span>Fyll ett mätglas med din vätska (vört/must). Se till att det inte är för mycket skum.</span></li>
+                      <li className="flex gap-3"><span className="font-bold text-orange-400">2.</span><span>Sänk försiktigt ner hydrometern och snurra den lite för att bli av med luftbubblor.</span></li>
+                      <li className="flex gap-3"><span className="font-bold text-orange-400">3.</span><span>Läs av värdet precis vid vätskans yta.</span></li>
+                      <li className="flex gap-3"><span className="font-bold text-orange-400">4.</span><span>Mät vätskans temperatur. Om den inte är 20°C, skriv in temperaturen i appen så korrigeras värdet automatiskt.</span></li>
                     </ul>
                   </div>
-                  <p className="text-xs text-slate-400 italic">
-                    Tips: Rent vatten har 0 °Oe. Socker gör vätskan tyngre (plusvärde). Alkohol gör vätskan lättare (kan ge minusvärde vid torrt mjöd).
-                  </p>
+                  <p className="text-xs text-slate-400 italic">Tips: Rent vatten har 0 °Oe. Socker gör vätskan tyngre (plusvärde). Alkohol gör vätskan lättare (kan ge minusvärde vid torrt mjöd).</p>
                 </div>
               </section>
-
             </div>
           </div>
         </div>
@@ -526,7 +592,6 @@ export default function App() {
           >
             v1.0.0
           </span>
-          
           <button 
             onClick={() => setShowInfo(true)}
             className="ml-2 text-slate-500 hover:text-orange-400 transition-colors p-1 rounded-full hover:bg-slate-800"
@@ -560,7 +625,7 @@ export default function App() {
           <button 
             onClick={handleSaveBatch}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 transition-all border border-orange-500/20 hover:border-orange-500/40 shadow-lg shadow-orange-900/20 group active:scale-95"
-            title="Spara projekt till listan"
+            title="Spara projekt till listan (Molnet)"
           >
             <Save size={16} className="group-hover:scale-110 transition-transform" />
             <span className="text-xs font-medium">Spara</span>
