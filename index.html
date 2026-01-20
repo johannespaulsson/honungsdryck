@@ -1,1120 +1,700 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Wrench, Archive, Plus, Save, Upload, Activity, Droplets, Trash2, Calendar, FileText, Download, Info, X, TrendingDown, Bell, ChevronDown, FolderOpen, LogIn, LogOut, User } from 'lucide-react';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
-
-// --- FIREBASE SETUP ---
-const userFirebaseConfig = {
-  apiKey: "AIzaSyDGmN-60JoFMFyKNtEVR4sRf258GTv2jU4",
-  authDomain: "mjodbryggning.firebaseapp.com",
-  projectId: "mjodbryggning",
-  storageBucket: "mjodbryggning.firebasestorage.app",
-  messagingSenderId: "795065616004",
-  appId: "1:795065616004:web:27f329729112c0f09fa4d1",
-  measurementId: "G-1GDMF1NNQ4"
-};
-
-let firebaseConfig;
-if (typeof __firebase_config !== 'undefined') {
-  try {
-    firebaseConfig = JSON.parse(__firebase_config);
-  } catch (e) {
-    firebaseConfig = userFirebaseConfig;
-  }
-} else {
-  firebaseConfig = userFirebaseConfig;
-}
-
-let app;
-if (getApps().length === 0) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApp();
-}
-
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : "mjodbryggning-live";
-
-export default function App() {
-  // --- STATE ---
-  const [user, setUser] = useState(null);
-  const [currentBatchId, setCurrentBatchId] = useState(null);
-  const [showInfo, setShowInfo] = useState(false); 
-  
-  // UI States
-  const [showBatchMenu, setShowBatchMenu] = useState(false); 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [batchToDelete, setBatchToDelete] = useState(null);
-  const [showReminderMenu, setShowReminderMenu] = useState(false);
-  const [reminderType, setReminderType] = useState('measure');
-
-  // Validering
-  const [nameError, setNameError] = useState(false);
-  
-  // Datafält
-  const [batchName, setBatchName] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [ingredients, setIngredients] = useState('');
-  const [log, setLog] = useState(''); 
-  
-  const [og, setOg] = useState(0);
-  const [ogTemp, setOgTemp] = useState(20);
-
-  const [fg, setFg] = useState(0);
-  const [fgTemp, setFgTemp] = useState(20);
-
-  const [savedBatches, setSavedBatches] = useState([]);
-
-  const fileInputRef = useRef(null);
-  const batchMenuRef = useRef(null); 
-
-  // --- EFFECT: Klicka utanför för att stänga meny ---
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (batchMenuRef.current && !batchMenuRef.current.contains(event.target)) {
-        setShowBatchMenu(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [batchMenuRef]);
-
-  // --- TAILWIND FIX & AUTH ---
-  useEffect(() => {
-    // 1. STYLING-AKUTEN: Sätt färger direkt på body för att undvika vit skärm
-    document.body.style.backgroundColor = '#0f172a'; // Mörkblå
-    document.body.style.color = '#ffedd5'; // Ljusorange text
-    document.body.style.margin = '0';
-    document.body.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
-
-    // 2. Ladda Tailwind manuellt om det saknas (Fixar layouten)
-    const loadTailwind = () => {
-       if (typeof window !== 'undefined' && !window.tailwind && !document.getElementById('tailwind-cdn-fallback')) {
-          console.log("Tailwind saknas, injicerar CDN...");
-          const script = document.createElement('script');
-          script.id = 'tailwind-cdn-fallback';
-          script.src = "https://cdn.tailwindcss.com";
-          script.onload = () => console.log("Tailwind CDN laddat.");
-          document.head.appendChild(script);
-       }
-    };
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mjödbryggning Pro</title>
     
-    loadTailwind();
-    setTimeout(loadTailwind, 1000);
-
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        try {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } catch (e) {
-          console.warn("Custom token auth failed, falling back to anonymous", e);
-          await signInAnonymously(auth);
-        }
-      } else {
-        await signInAnonymously(auth).catch((error) => {
-           console.error("Inloggning misslyckades", error);
-        });
-      }
-    };
-    initAuth();
+    <!-- 1. Hämta designmotorn (Tailwind CSS) -->
+    <script src="https://cdn.tailwindcss.com"></script>
     
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // --- GOOGLE LOGIN ---
-  const handleGoogleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Google login failed", error);
-      alert("Kunde inte logga in med Google. Kontrollera att domänen är godkänd i Firebase Console.");
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      await signInAnonymously(auth);
-    } catch (error) {
-      console.error("Logout failed", error);
-    }
-  };
-
-  // --- FIREBASE DATA SYNC ---
-  useEffect(() => {
-    if (!user) return;
-
-    const unsubscribe = onSnapshot(
-      collection(db, 'artifacts', appId, 'users', user.uid, 'batches'),
-      (snapshot) => {
-        const batches = snapshot.docs.map(doc => ({ 
-          id: parseInt(doc.id), 
-          ...doc.data() 
-        }));
-        setSavedBatches(batches.sort((a, b) => b.id - a.id));
-      },
-      (error) => {
-        console.error("Kunde inte hämta batcher:", error);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user]);
-
-  // --- BERÄKNINGSFUNKTIONER ---
-  
-  const getCorrectedGravity = (gravity, temp) => {
-    const g = parseFloat(gravity);
-    const t = parseFloat(temp);
-    if (isNaN(g) || isNaN(t)) return 0;
-    const correction = (t - 20) * 0.2;
-    return g + correction;
-  };
-
-  const calculatePotentialABV = () => {
-    const correctedOG = getCorrectedGravity(og, ogTemp);
-    const abv = Math.max(0, correctedOG / 7.5);
-    return abv.toFixed(1);
-  };
-
-  const calculateCurrentABV = () => {
-    const correctedOG = getCorrectedGravity(og, ogTemp);
-    const correctedFG = getCorrectedGravity(fg, fgTemp);
-    if (correctedOG <= 0) return "0.0";
-    const diff = correctedOG - correctedFG;
-    const abv = Math.max(0, diff / 7.5);
-    return abv.toFixed(1);
-  };
-
-  const calculateAttenuation = () => {
-    const correctedOG = getCorrectedGravity(og, ogTemp);
-    const correctedFG = getCorrectedGravity(fg, fgTemp);
-    if (correctedOG <= 0) return "0.0";
-    const diff = correctedOG - correctedFG;
-    const att = (diff / correctedOG) * 100;
-    return Math.max(0, Math.min(100, att)).toFixed(1);
-  };
-
-  const getDaysSince = (dateString) => {
-    if (!dateString) return 0;
-    const start = new Date(dateString);
-    const today = new Date();
-    start.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-    const diffTime = today.getTime() - start.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    return Math.max(0, diffDays);
-  };
-
-  const getSweetnessStatus = () => {
-    const correctedFG = getCorrectedGravity(fg, fgTemp);
-    if (og == 0 && fg == 0) return "-";
-    if (correctedFG >= 45) return "Dessert / Mycket sött";
-    if (correctedFG >= 25) return "Sött";
-    if (correctedFG >= 12) return "Halvsött";
-    if (correctedFG >= 4) return "Halvtorrt";
-    return "Torrt";
-  };
-
-  const potentialABV = calculatePotentialABV();
-  const currentABV = calculateCurrentABV();
-  const attenuation = calculateAttenuation();
-  const sweetness = getSweetnessStatus();
-
-  // --- GRAF-DATA ---
-  const getGraphData = () => {
-    const dataPoints = [];
+    <!-- 2. Hämta React (Motorn som driver appen) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    if (og > 0 && startDate) {
-      dataPoints.push({
-        date: new Date(startDate).getTime(),
-        displayDate: startDate.substring(5),
-        value: parseFloat(og),
-        type: 'start'
-      });
-    }
+    <!-- 3. Hämta Babel (Översätter koden så webbläsaren förstår den) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    const regex = /- (\d{4}\/\d{2}\/\d{2}):\s*(-?\d+)\s*°Oe/g;
-    let match;
-    while ((match = regex.exec(log)) !== null) {
-      const dateStr = match[1].replace(/\//g, '-');
-      const val = parseFloat(match[2]);
-      if (!isNaN(val)) {
-        dataPoints.push({
-          date: new Date(dateStr).getTime(),
-          displayDate: dateStr.substring(5),
-          value: val,
-          type: 'log'
-        });
-      }
-    }
-    return dataPoints.sort((a, b) => a.date - b.date);
-  };
+    <!-- 4. Hämta Firebase (Databasen) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-  const graphData = getGraphData();
+    <!-- Grundläggande stilar för att slippa vit skärm vid laddning -->
+    <style>
+        body { background-color: #0f172a; color: #ffedd5; font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.5); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(251, 146, 60, 0.2); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(251, 146, 60, 0.4); }
+        .saving-pulse { animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-  // --- LOGG & PÅMINNELSE ---
+    <!-- HÄR BÖRJAR APPEN -->
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-  const handleAddLogEntry = () => {
-    const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
-    const newEntry = `- ${today}: ${fg} °Oe, ${currentABV}% ABV (${attenuation}% utjäst)\n`;
-    setLog(prevLog => {
-      const prefix = (prevLog.length > 0 && !prevLog.endsWith('\n')) ? '\n' : '';
-      return prevLog + prefix + newEntry;
-    });
-  };
+        // --- IKONER (Hårdkodade SVG:er) ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const icons = {
+                Wrench: <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
+                Archive: <><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></>,
+                Plus: <path d="M5 12h14M12 5v14"/>,
+                Save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>,
+                Upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
+                Download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
+                Activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>,
+                Droplets: <><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.8-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></>,
+                Trash2: <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/>,
+                Calendar: <><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>,
+                FileText: <><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></>,
+                Info: <><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></>,
+                X: <><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>,
+                TrendingDown: <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></>,
+                Bell: <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></>,
+                ChevronDown: <path d="m6 9 6 6 6-6"/>,
+                FolderOpen: <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/>,
+                LogIn: <><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></>,
+                LogOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></>,
+                User: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name]}
+                </svg>
+            );
+        };
 
-  const handleAddDateOnly = () => {
-    const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
-    const newEntry = `- ${today}: `;
-    setLog(prevLog => {
-      const prefix = (prevLog.length > 0 && !prevLog.endsWith('\n')) ? '\n' : '';
-      return prevLog + prefix + newEntry;
-    });
-  };
+        // --- FIREBASE KONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDGmN-60JoFMFyKNtEVR4sRf258GTv2jU4",
+            authDomain: "mjodbryggning.firebaseapp.com",
+            projectId: "mjodbryggning",
+            storageBucket: "mjodbryggning.firebasestorage.app",
+            messagingSenderId: "795065616004",
+            appId: "1:795065616004:web:27f329729112c0f09fa4d1",
+            measurementId: "G-1GDMF1NNQ4"
+        };
 
-  const reminderOptions = {
-    measure: { label: 'Mät Gravity', desc: 'Dags att mäta Öchsle och uppdatera loggen.' },
-    rack: { label: 'Tappa om', desc: 'Dags att tappa om (racka) mjödet till ett nytt kärl.' },
-    feed: { label: 'Tillsätt näring', desc: 'Dags att tillsätta jästnäring.' },
-    sweeten: { label: 'Eftersöta', desc: 'Dags att stabilisera och eftersöta mjödet.' },
-    bottle: { label: 'Buteljera', desc: 'Dags att tappa upp mjödet på flaskor.' }
-  };
+        // Initiera Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = "mjodbryggning-live"; 
 
-  const handleCreateReminder = (days) => {
-    const date = new Date();
-    date.setDate(date.getDate() + days);
-    date.setHours(18, 0, 0, 0);
-    
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    const dateStr = `${year}${month}${day}T${hours}${minutes}${seconds}`;
-    
-    const cleanName = batchName.trim() || 'Mjöd';
-    const typeInfo = reminderOptions[reminderType];
-
-    const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Mjödbryggning//App//SV',
-      'BEGIN:VEVENT',
-      `UID:${Date.now()}@mjodbryggning.app`,
-      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
-      `DTSTART:${dateStr}`,
-      `SUMMARY:${typeInfo.label}: ${cleanName}`,
-      `DESCRIPTION:${typeInfo.desc} (Batch: ${cleanName})`,
-      'END:VEVENT',
-      'END:VCALENDAR'
-    ].join('\r\n');
-
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `paminnelse-${typeInfo.label.toLowerCase()}-${cleanName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ics`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    setShowReminderMenu(false);
-  };
-
-  const handleFillTestData = () => {
-    setBatchName("Testmjöd (Viking Blod)");
-    const today = new Date();
-    const start = new Date(today);
-    start.setDate(today.getDate() - 30);
-    const startStr = start.toISOString().split('T')[0];
-    setStartDate(startStr);
-    setIngredients("3.5 kg Honung (Ljung)\n10 l Vatten\n50g Hibiskusblommor\nJäst: Lalvin D-47\nJästnäring: Fermaid O");
-    setOg(110);
-    setOgTemp(20);
-    setFg(2);
-    setFgTemp(20);
-    setCurrentBatchId(null); 
-
-    let testLog = "";
-    const points = [
-        { day: 0, val: 110 },
-        { day: 3, val: 95 },
-        { day: 7, val: 60 },
-        { day: 14, val: 20 },
-        { day: 21, val: 5 },
-        { day: 30, val: 2 } 
-    ];
-
-    points.forEach(p => {
-        const d = new Date(start);
-        d.setDate(d.getDate() + p.day);
-        const dateStr = d.toISOString().split('T')[0].replace(/-/g, '/');
-        const att = Math.max(0, Math.min(100, ((110 - p.val) / 110) * 100)).toFixed(1);
-        const abv = Math.max(0, (110 - p.val) / 7.5).toFixed(1);
-        testLog += `- ${dateStr}: ${p.val} °Oe, ${abv}% ABV (${att}% utjäst)\n`;
-    });
-
-    setLog(testLog);
-    setNameError(false);
-  };
-
-  // --- CRUD OPERATIONS ---
-
-  const handleSaveBatch = async () => {
-    if (!batchName.trim()) {
-      setNameError(true); 
-      return;
-    }
-    if (!user) {
-        alert("Du är inte ansluten till databasen än. Vänta lite...");
-        return;
-    }
-
-    setNameError(false);
-
-    const batchData = {
-      name: batchName,
-      startDate: startDate, 
-      lastModified: new Date().toLocaleDateString('sv-SE'),
-      ingredients,
-      log,
-      og,
-      ogTemp,
-      fg,
-      fgTemp
-    };
-
-    try {
-      if (currentBatchId) {
-        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'batches', currentBatchId.toString());
-        await setDoc(docRef, batchData, { merge: true });
-      } else {
-        const newId = Date.now();
-        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'batches', newId.toString());
-        await setDoc(docRef, batchData);
-        setCurrentBatchId(newId);
-      }
-    } catch (error) {
-      console.error("Fel vid sparande:", error);
-      alert("Kunde inte spara till molnet.");
-    }
-  };
-
-  const handleLoadBatch = (batch) => {
-    setCurrentBatchId(batch.id);
-    setBatchName(batch.name);
-    setStartDate(batch.startDate || new Date().toISOString().split('T')[0]);
-    setIngredients(batch.ingredients);
-    setLog(batch.log || '');
-    setOg(batch.og);
-    setOgTemp(batch.ogTemp);
-    setFg(batch.fg);
-    setFgTemp(batch.fgTemp);
-    setNameError(false);
-    setShowBatchMenu(false); // Stäng menyn efter laddning
-  };
-
-  const handleNewBatch = () => {
-    setCurrentBatchId(null);
-    setBatchName('');
-    setStartDate(new Date().toISOString().split('T')[0]);
-    setIngredients('');
-    setLog('');
-    setOg(0);
-    setOgTemp(20);
-    setFg(0);
-    setFgTemp(20);
-    setNameError(false);
-    setShowBatchMenu(false); // Stäng menyn
-  };
-
-  const initiateDeleteBatch = (e, id) => {
-    e.stopPropagation();
-    setBatchToDelete(id);
-    setShowDeleteModal(true);
-  };
-
-  const confirmDeleteBatch = async () => {
-    if (batchToDelete && user) {
-      try {
-        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'batches', batchToDelete.toString());
-        await deleteDoc(docRef);
-        
-        if (currentBatchId === batchToDelete) {
-          handleNewBatch();
-        }
-        setShowDeleteModal(false);
-        setBatchToDelete(null);
-      } catch (error) {
-        console.error("Fel vid radering:", error);
-        alert("Kunde inte ta bort batchen.");
-      }
-    }
-  };
-
-  const handleExportData = () => {
-    if (savedBatches.length === 0) {
-      alert("Det finns inga sparade batcher att exportera.");
-      return;
-    }
-    const dataStr = JSON.stringify(savedBatches, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `batch-builder-backup-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportClick = () => {
-    fileInputRef.current.click();
-  };
-
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const importedData = JSON.parse(e.target.result);
-        if (Array.isArray(importedData) && user) {
-            let importCount = 0;
-            const existingIds = new Set(savedBatches.map(b => b.id));
+        // --- HUVUDKOMPONENT ---
+        function App() {
+            // STATE
+            const [user, setUser] = useState(null);
+            const [isOffline, setIsOffline] = useState(false);
+            const [isSaving, setIsSaving] = useState(false); // Nytt state för att förhindra dubbel-sparning
+            const [currentBatchId, setCurrentBatchId] = useState(null);
+            const [showInfo, setShowInfo] = useState(false);
+            const [showBatchMenu, setShowBatchMenu] = useState(false);
+            const [showDeleteModal, setShowDeleteModal] = useState(false);
+            const [batchToDelete, setBatchToDelete] = useState(null);
+            const [showReminderMenu, setShowReminderMenu] = useState(false);
+            const [reminderType, setReminderType] = useState('measure');
+            const [nameError, setNameError] = useState(false);
             
-            for (const batch of importedData) {
-              if (!existingIds.has(batch.id)) {
-                const newId = Date.now() + Math.floor(Math.random() * 10000); 
-                const { id, ...dataToSave } = batch;
-                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'batches', newId.toString());
-                await setDoc(docRef, dataToSave);
-                importCount++;
-              }
-            }
-            if (importCount > 0) alert(`Lyckades importera ${importCount} batcher till molnet!`);
-            else alert("Inga nya batcher hittades.");
-        }
-      } catch (error) {
-        console.error("Import error", error);
-        alert("Något gick fel vid importen.");
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = ''; 
-  };
+            // DATA STATE
+            const [batchName, setBatchName] = useState('');
+            const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+            const [ingredients, setIngredients] = useState('');
+            const [log, setLog] = useState('');
+            const [og, setOg] = useState(0);
+            const [ogTemp, setOgTemp] = useState(20);
+            const [fg, setFg] = useState(0);
+            const [fgTemp, setFgTemp] = useState(20);
+            const [savedBatches, setSavedBatches] = useState([]);
 
-  const oechsleOptions = Array.from({ length: 136 }, (_, i) => i - 15);
+            const fileInputRef = useRef(null);
+            const batchMenuRef = useRef(null);
 
-  return (
-    <div 
-      className="min-h-screen flex flex-col font-sans selection:bg-orange-500/30 relative overflow-hidden"
-      style={{ 
-        backgroundColor: '#0f172a', // Fallback mörkblå
-        color: '#ffedd5', // Fallback textfärg
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh'
-      }} 
-    >
-      
-      {/* DELETE CONFIRMATION MODAL */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-100" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4 text-orange-400">
-              <Trash2 size={24} />
-              <h3 className="text-lg font-bold">Ta bort batch?</h3>
-            </div>
-            <p className="text-slate-300 text-sm mb-6 leading-relaxed">
-              Är du säker på att du vill ta bort denna batch? Detta går inte att ångra och den raderas från molnet.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button 
-                onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors text-sm font-medium"
-              >
-                Avbryt
-              </button>
-              <button 
-                onClick={confirmDeleteBatch}
-                className="px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 transition-all text-sm font-medium shadow-lg shadow-red-900/10"
-              >
-                Ta bort
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            // AUTHENTICATION
+            useEffect(() => {
+                const unsubscribe = auth.onAuthStateChanged((u) => {
+                    if (u) {
+                        setUser(u);
+                        setIsOffline(false);
+                    } else {
+                        auth.signInAnonymously().catch((error) => {
+                            console.warn("Firebase anslutning misslyckades, kör offline.", error);
+                            setIsOffline(true);
+                            const localData = localStorage.getItem('mjod_batches');
+                            if (localData) {
+                                try {
+                                    setSavedBatches(JSON.parse(localData).sort((a, b) => b.id - a.id));
+                                } catch(e) {}
+                            }
+                        });
+                    }
+                });
+                return () => unsubscribe();
+            }, []);
 
-      {/* INFO MODAL */}
-      {showInfo && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowInfo(false)}>
-          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-slate-700">
-              <h2 className="text-xl font-bold text-orange-400 flex items-center gap-2">
-                <Info size={24} />
-                Mjödbryggning & App-guide
-              </h2>
-              <button onClick={() => setShowInfo(false)} className="text-slate-400 hover:text-orange-300 transition-colors">
-                <X size={24} />
-              </button>
-            </div>
-            <div className="p-6 text-slate-300 space-y-6 text-sm leading-relaxed">
-              <section>
-                <h3 className="text-orange-200 font-bold uppercase tracking-wider mb-3 text-xs border-b border-slate-700 pb-1">Hur man använder appen</h3>
-                <ul className="list-disc pl-5 space-y-2">
-                   <li><strong className="text-orange-100">Batcher:</strong> Klicka på <FolderOpen size={14} className="inline mx-1"/> högst upp för att se dina sparade batcher eller skapa en ny.</li>
-                  <li><strong className="text-orange-100">Molnlagring:</strong> Dina batcher sparas nu automatiskt i molnet (Firebase) när du klickar på "Spara". Du kan komma åt dem från vilken enhet som helst om du använder samma inloggning.</li>
-                  <li><strong className="text-orange-100">Verktyg:</strong> Här matar du in all data. Fyll i namn, datum, ingredienser och mätvärden.</li>
-                  <li><strong className="text-orange-100">Logg:</strong> Använd den lilla <Save size={12} className="inline mx-1"/> ikonen vid FG för att snabbt spara dagens mätvärde till loggen.</li>
-                </ul>
-              </section>
-              {/* ... Resten av info ... */}
-              <section>
-                <h3 className="text-orange-200 font-bold uppercase tracking-wider mb-3 text-xs border-b border-slate-700 pb-1">Att mäta Öchsle (°Oe)</h3>
-                <div className="space-y-3">
-                  <p>Tips: Rent vatten har 0 °Oe. Socker gör vätskan tyngre (plusvärde). Alkohol gör vätskan lättare (kan ge minusvärde vid torrt mjöd).</p>
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
-      )}
+            // DATA SYNC
+            useEffect(() => {
+                if (!user || isOffline) return;
+                const unsubscribe = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches')
+                    .onSnapshot((snapshot) => {
+                        const batches = snapshot.docs.map(doc => ({
+                            id: doc.id, // Behåll ID som sträng
+                            ...doc.data()
+                        }));
+                        setSavedBatches(batches.sort((a, b) => (b.id > a.id ? 1 : -1)));
+                    }, (error) => {
+                        console.error("Sync Error", error);
+                        setIsOffline(true);
+                    });
+                return () => unsubscribe();
+            }, [user, isOffline]);
 
-      {/* Dold filväljare för import */}
-      <input 
-        type="file" 
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".json"
-        className="hidden" 
-      />
+            // KLICKA UTANFÖR MENY
+            useEffect(() => {
+                function handleClickOutside(event) {
+                    if (batchMenuRef.current && !batchMenuRef.current.contains(event.target)) {
+                        setShowBatchMenu(false);
+                    }
+                }
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, [batchMenuRef]);
 
-      {/* Header */}
-      <header className="flex-none p-4 border-b border-slate-800 flex items-center justify-between z-10 bg-slate-900 sticky top-0 backdrop-blur-md bg-slate-900/90 shadow-sm">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold tracking-tight text-orange-400">
-            Mjödbryggning
-          </h1>
-          <span 
-            onClick={handleFillTestData}
-            className="text-[10px] font-mono text-orange-200/40 border border-orange-500/20 px-1.5 py-0.5 rounded cursor-pointer hover:bg-orange-500/10 hover:text-orange-200 transition-colors"
-            title="Klicka för att ladda testdata"
-          >
-            v1.0.0
-          </span>
-          <button 
-            onClick={() => setShowInfo(true)}
-            className="ml-2 text-slate-500 hover:text-orange-400 transition-colors p-1 rounded-full hover:bg-slate-800"
-            title="Visa instruktioner"
-          >
-            <Info size={18} />
-          </button>
-        </div>
+            // --- BERÄKNINGAR ---
+            const getCorrectedGravity = (g, t) => {
+                const grav = parseFloat(g);
+                const temp = parseFloat(t);
+                if (isNaN(grav) || isNaN(temp)) return 0;
+                return grav + ((temp - 20) * 0.2);
+            };
 
-        <div className="flex items-center gap-2">
-           {/* BATCH MENU DROPDOWN */}
-           <div className="relative" ref={batchMenuRef}>
-            <button 
-              onClick={() => setShowBatchMenu(!showBatchMenu)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all border border-transparent group ${showBatchMenu ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'text-slate-400 hover:text-orange-300 hover:bg-slate-800 hover:border-slate-700'}`}
-              title="Mina Batcher"
-            >
-              <FolderOpen size={16} className="group-hover:-translate-y-0.5 transition-transform" />
-              <span className="text-xs font-medium hidden sm:inline">Mina Batcher</span>
-              <ChevronDown size={14} className={`transition-transform duration-200 ${showBatchMenu ? 'rotate-180' : ''}`}/>
-            </button>
+            const calculatePotentialABV = () => {
+                const cOG = getCorrectedGravity(og, ogTemp);
+                return Math.max(0, cOG / 7.5).toFixed(1);
+            };
 
-            {/* DROPDOWN CONTENT */}
-            {showBatchMenu && (
-              <div className="absolute right-0 top-full mt-2 w-80 max-h-[80vh] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
-                
-                {/* LOGIN STATUS HEADER */}
-                <div className="p-3 bg-slate-950/50 border-b border-slate-800 flex justify-between items-center">
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <User size={14}/>
-                        <span>{user && !user.isAnonymous ? 'Inloggad (Google)' : 'Gäst (Anonym)'}</span>
-                    </div>
-                    {user && !user.isAnonymous ? (
-                        <button onClick={handleLogout} className="text-[10px] text-orange-400 hover:underline flex items-center gap-1">
-                            <LogOut size={10}/> Logga ut
-                        </button>
-                    ) : (
-                        <button onClick={handleGoogleLogin} className="text-[10px] text-orange-400 hover:underline flex items-center gap-1 font-bold">
-                            <LogIn size={10}/> Logga in
-                        </button>
+            const calculateCurrentABV = () => {
+                const cOG = getCorrectedGravity(og, ogTemp);
+                const cFG = getCorrectedGravity(fg, fgTemp);
+                if (cOG <= 0) return "0.0";
+                return Math.max(0, (cOG - cFG) / 7.5).toFixed(1);
+            };
+
+            const calculateAttenuation = () => {
+                const cOG = getCorrectedGravity(og, ogTemp);
+                const cFG = getCorrectedGravity(fg, fgTemp);
+                if (cOG <= 0) return "0.0";
+                return Math.max(0, Math.min(100, ((cOG - cFG) / cOG) * 100)).toFixed(1);
+            };
+
+            const getSweetnessStatus = () => {
+                const cFG = getCorrectedGravity(fg, fgTemp);
+                if (og == 0 && fg == 0) return "-";
+                if (cFG >= 45) return "Dessert / Mycket sött";
+                if (cFG >= 25) return "Sött";
+                if (cFG >= 12) return "Halvsött";
+                if (cFG >= 4) return "Halvtorrt";
+                return "Torrt";
+            };
+
+            const getDaysSince = (dateStr) => {
+                if (!dateStr) return 0;
+                const start = new Date(dateStr);
+                const today = new Date();
+                start.setHours(0,0,0,0);
+                today.setHours(0,0,0,0);
+                const diff = today.getTime() - start.getTime();
+                return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+            };
+
+            // --- GRAF ---
+            const getGraphData = () => {
+                const dataPoints = [];
+                if (og > 0 && startDate) {
+                    dataPoints.push({
+                        date: new Date(startDate).getTime(),
+                        displayDate: startDate.substring(5),
+                        value: parseFloat(og),
+                        type: 'start'
+                    });
+                }
+                const regex = /- (\d{4}\/\d{2}\/\d{2}):\s*(-?\d+)\s*°Oe/g;
+                let match;
+                while ((match = regex.exec(log)) !== null) {
+                    const dStr = match[1].replace(/\//g, '-');
+                    const val = parseFloat(match[2]);
+                    if (!isNaN(val)) {
+                        dataPoints.push({
+                            date: new Date(dStr).getTime(),
+                            displayDate: dStr.substring(5),
+                            value: val,
+                            type: 'log'
+                        });
+                    }
+                }
+                return dataPoints.sort((a, b) => a.date - b.date);
+            };
+
+            const potentialABV = calculatePotentialABV();
+            const currentABV = calculateCurrentABV();
+            const attenuation = calculateAttenuation();
+            const sweetness = getSweetnessStatus();
+            const graphData = getGraphData();
+            const oechsleOptions = Array.from({ length: 136 }, (_, i) => i - 15);
+
+            // --- ACTIONS ---
+            const handleGoogleLogin = async () => {
+                if (isOffline) return alert("Kontrollera nätverket.");
+                const provider = new firebase.auth.GoogleAuthProvider();
+                try { await auth.signInWithPopup(provider); } catch (error) { alert("Inloggning misslyckades."); }
+            };
+
+            const handleLogout = async () => {
+                await auth.signOut();
+                auth.signInAnonymously().catch(() => setIsOffline(true));
+            };
+
+            const handleAddLogEntry = () => {
+                const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+                const newEntry = `- ${today}: ${fg} °Oe, ${currentABV}% ABV (${attenuation}% utjäst)\n`;
+                setLog(prev => prev + newEntry);
+            };
+
+            const handleAddDateOnly = () => {
+                const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+                setLog(prev => {
+                    const prefix = (prev.length > 0 && !prev.endsWith('\n')) ? '\n' : '';
+                    return prev + prefix + `- ${today}: `;
+                });
+            };
+
+            const handleSaveBatch = async () => {
+                if (!batchName.trim()) return setNameError(true);
+                if (isSaving) return; // Stoppa om redan sparar
+
+                setIsSaving(true);
+                setNameError(false);
+
+                const data = {
+                    name: batchName,
+                    startDate,
+                    lastModified: new Date().toLocaleDateString('sv-SE'),
+                    ingredients,
+                    log,
+                    og, ogTemp, fg, fgTemp
+                };
+
+                try {
+                    if (isOffline || !user) {
+                        let newBatches;
+                        let finalId = currentBatchId;
+                        if (currentBatchId) {
+                            newBatches = savedBatches.map(b => b.id === currentBatchId ? { ...data, id: currentBatchId } : b);
+                        } else {
+                            finalId = Date.now().toString();
+                            newBatches = [...savedBatches, { ...data, id: finalId }];
+                            setCurrentBatchId(finalId);
+                        }
+                        const sorted = newBatches.sort((a, b) => (b.id > a.id ? 1 : -1));
+                        setSavedBatches(sorted);
+                        localStorage.setItem('mjod_batches', JSON.stringify(sorted));
+                    } else {
+                        let finalId = currentBatchId;
+                        if (!finalId) {
+                            finalId = Date.now().toString();
+                            setCurrentBatchId(finalId);
+                        }
+                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(finalId).set(data, { merge: true });
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert("Fel vid sparning.");
+                } finally {
+                    setIsSaving(false);
+                }
+            };
+
+            const handleLoadBatch = (b) => {
+                setCurrentBatchId(b.id);
+                setBatchName(b.name);
+                setStartDate(b.startDate || new Date().toISOString().split('T')[0]);
+                setIngredients(b.ingredients || '');
+                setLog(b.log || '');
+                setOg(b.og || 0);
+                setOgTemp(b.ogTemp || 20);
+                setFg(b.fg || 0);
+                setFgTemp(b.fgTemp || 20);
+                setNameError(false);
+                setShowBatchMenu(false);
+            };
+
+            const handleNewBatch = () => {
+                setCurrentBatchId(null);
+                setBatchName('');
+                setStartDate(new Date().toISOString().split('T')[0]);
+                setIngredients('');
+                setLog('');
+                setOg(0); setOgTemp(20);
+                setFg(0); setFgTemp(20);
+                setNameError(false);
+                setShowBatchMenu(false);
+            };
+
+            const confirmDeleteBatch = async () => {
+                if (batchToDelete) {
+                    if (isOffline) {
+                        const newBatches = savedBatches.filter(b => b.id !== batchToDelete);
+                        setSavedBatches(newBatches);
+                        localStorage.setItem('mjod_batches', JSON.stringify(newBatches));
+                    } else if (user) {
+                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(batchToDelete).delete();
+                    }
+                    if (currentBatchId === batchToDelete) handleNewBatch();
+                    setShowDeleteModal(false);
+                    setBatchToDelete(null);
+                }
+            };
+
+            const handleExportData = () => {
+                if(savedBatches.length === 0) return alert("Inget att exportera");
+                const blob = new Blob([JSON.stringify(savedBatches, null, 2)], {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `mjod-backup.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = async (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        if(Array.isArray(data)) {
+                            const currentIds = new Set(savedBatches.map(b => b.id));
+                            let count = 0;
+                            for(const b of data) {
+                                if(!currentIds.has(b.id)) {
+                                    const newId = (Date.now() + Math.floor(Math.random()*1000)).toString();
+                                    const {id, ...rest} = b;
+                                    if (isOffline) {
+                                        savedBatches.push({...rest, id: newId});
+                                    } else {
+                                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(newId).set(rest);
+                                    }
+                                    count++;
+                                }
+                            }
+                            if (isOffline) {
+                                const sorted = savedBatches.sort((a,b) => (b.id > a.id ? 1 : -1));
+                                setSavedBatches(sorted);
+                                localStorage.setItem('mjod_batches', JSON.stringify(sorted));
+                            }
+                            alert(`Importerade ${count} st.`);
+                        }
+                    } catch(err) { alert("Fel vid import"); }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+            };
+
+            const handleFillTestData = () => {
+                setBatchName("Testmjöd (Viking Blod)");
+                setIngredients("3.5 kg Honung (Ljung)\n10 l Vatten\n50g Hibiskusblommor\nJäst: Lalvin D-47");
+                setOg(110); setFg(2);
+                const start = new Date(); start.setDate(start.getDate()-30);
+                setStartDate(start.toISOString().split('T')[0]);
+                let l = "";
+                const pts = [{d:0,v:110},{d:3,v:95},{d:7,v:60},{d:14,v:20},{d:21,v:5},{d:30,v:2}];
+                pts.forEach(p => {
+                    const d = new Date(start); d.setDate(d.getDate()+p.d);
+                    l += `- ${d.toISOString().split('T')[0].replace(/-/g,'/')}: ${p.v} °Oe\n`;
+                });
+                setLog(l);
+            };
+
+            const handleCreateReminder = (days) => {
+                const d = new Date(); d.setDate(d.getDate() + days); d.setHours(18,0,0,0);
+                const iso = d.toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
+                const content = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:${iso}\nSUMMARY:Mjödbryggning: ${batchName || 'Batch'}\nEND:VEVENT\nEND:VCALENDAR`;
+                const url = URL.createObjectURL(new Blob([content], {type: 'text/calendar'}));
+                const a = document.createElement('a'); a.href = url; a.download = `mjod-event.ics`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                setShowReminderMenu(false);
+            };
+
+            return (
+                <div className="flex flex-col min-h-screen bg-slate-900 text-orange-100 selection:bg-orange-500/30">
+                    <style>{`
+                        body { background-color: #0f172a; color: #ffedd5; }
+                        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.5); }
+                        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(251, 146, 60, 0.2); border-radius: 4px; }
+                    `}</style>
+                    
+                    {/* MODALER */}
+                    {showInfo && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowInfo(false)}>
+                            <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-xl font-bold text-orange-400 flex gap-2"><Icon name="Info"/> Guide</h2>
+                                    <button onClick={() => setShowInfo(false)}><Icon name="X"/></button>
+                                </div>
+                                <div className="space-y-4 text-sm text-slate-300">
+                                    <h3 className="font-bold text-orange-200 border-b border-slate-700 pb-1">Spara & Synka</h3>
+                                    <p>Dina batcher sparas automatiskt. Logga in med Google i menyn "Mina Batcher" för att synka mellan mobil och dator.</p>
+                                    {isOffline && <p className="text-orange-400 italic">Offlineläge aktivt. Data sparas i din webbläsare.</p>}
+                                </div>
+                            </div>
+                        </div>
                     )}
-                </div>
-
-                <div className="p-3 border-b border-slate-800 flex-none bg-slate-900/95 backdrop-blur">
-                  <button 
-                    onClick={handleNewBatch}
-                    className="w-full py-2 border-2 border-dashed border-slate-700 rounded-lg text-slate-400 hover:text-orange-300 hover:border-orange-500/40 hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group"
-                  >
-                    <Plus size={16} className="group-hover:scale-110 transition-transform"/>
-                    <span className="text-xs font-bold uppercase tracking-wider">Skapa Ny Batch</span>
-                  </button>
-                </div>
-                
-                <div className="overflow-y-auto custom-scrollbar flex-1 p-2 space-y-2 bg-slate-900/50">
-                  {savedBatches.length === 0 ? (
-                    <div className="text-center py-6 px-4 text-slate-600 text-xs italic">
-                      Inga sparade batcher än.
-                    </div>
-                  ) : (
-                    savedBatches.map((batch) => (
-                      <div 
-                        key={batch.id} 
-                        onClick={() => handleLoadBatch(batch)}
-                        className={`p-3 rounded-lg border transition-all group cursor-pointer relative ${currentBatchId === batch.id ? 'bg-orange-500/10 border-orange-500/40' : 'bg-slate-800/50 border-slate-800 hover:border-slate-600 hover:bg-slate-800'}`}
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className={`font-medium text-sm truncate pr-6 ${currentBatchId === batch.id ? 'text-orange-300' : 'text-slate-300 group-hover:text-orange-200'}`}>{batch.name}</h4>
-                          <button 
-                            onClick={(e) => initiateDeleteBatch(e, batch.id)}
-                            className="text-slate-600 hover:text-red-400 transition-colors p-1 hover:bg-slate-900 rounded absolute top-2 right-2"
-                            title="Ta bort"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                    
+                    {showDeleteModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}>
+                            <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                                <h3 className="text-lg font-bold text-orange-400 mb-2 flex gap-2"><Icon name="Trash2"/> Ta bort?</h3>
+                                <p className="text-slate-300 text-sm mb-4">Är du säker? Detta kan inte ångras.</p>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setShowDeleteModal(false)} className="px-3 py-1.5 rounded hover:bg-slate-700">Avbryt</button>
+                                    <button onClick={confirmDeleteBatch} className="px-3 py-1.5 rounded bg-red-900/50 text-red-200 border border-red-800 hover:bg-red-900">Ta bort</button>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-                          <span>OG: <span className="text-slate-400">{batch.og}</span></span>
-                          <span>Start: {batch.startDate} ({getDaysSince(batch.startDate)}d)</span>
+                    )}
+
+                    {/* HEADER */}
+                    <header className="flex-none p-4 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900/95 backdrop-blur z-40">
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-xl font-bold tracking-tight text-orange-400">Mjödbryggning</h1>
+                            <span onClick={handleFillTestData} className="text-[10px] font-mono border border-orange-500/20 px-1.5 py-0.5 rounded cursor-pointer hover:text-orange-200" title="Ladda testdata">v1.1.0</span>
+                            <button onClick={() => setShowInfo(true)} className="text-slate-500 hover:text-orange-400"><Icon name="Info" size={18}/></button>
                         </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                
-                {/* Footer with actions */}
-                <div className="p-2 border-t border-slate-800 bg-slate-950/50 flex justify-between gap-2 text-[10px] text-slate-500">
-                    <button onClick={handleImportClick} className="hover:text-orange-300 flex items-center gap-1"><Upload size={12}/> Importera</button>
-                    <button onClick={handleExportData} className="hover:text-orange-300 flex items-center gap-1"><Download size={12}/> Exportera</button>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="h-5 w-px bg-slate-800 mx-1"></div>
-          
-          <button 
-            onClick={handleSaveBatch}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 transition-all border border-orange-500/20 hover:border-orange-500/40 shadow-lg shadow-orange-900/20 group active:scale-95"
-            title="Spara projekt till listan (Molnet)"
-          >
-            <Save size={16} className="group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-medium hidden sm:inline">Spara</span>
-            <span className="text-xs font-medium sm:hidden">Spara</span> {/* Always show text or icon? Keeping text for clarity */}
-          </button>
-        </div>
-      </header>
+                        
+                        <div className="flex items-center gap-2">
+                            <div className="relative" ref={batchMenuRef}>
+                                <button onClick={() => setShowBatchMenu(!showBatchMenu)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent transition-all ${showBatchMenu ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'text-slate-400 hover:bg-slate-800'}`}>
+                                    <Icon name="FolderOpen" size={16}/> <span className="text-xs font-medium hidden sm:inline">Mina Batcher</span> <Icon name="ChevronDown" size={14}/>
+                                </button>
+                                
+                                {showBatchMenu && (
+                                    <div className="absolute right-0 top-full mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden">
+                                        <div className="p-3 bg-slate-950/50 border-b border-slate-800 flex justify-between items-center text-xs text-slate-400">
+                                            <span className="flex gap-2 items-center"><Icon name="User" size={14}/> {isOffline ? 'Gäst (Offline)' : (user && !user.isAnonymous ? 'Inloggad' : 'Gäst (Moln)')}</span>
+                                            {!isOffline && (user && !user.isAnonymous ? (
+                                                <button onClick={handleLogout} className="text-orange-400 hover:underline">Logga ut</button>
+                                            ) : (
+                                                <button onClick={handleGoogleLogin} className="text-orange-400 font-bold hover:underline">Logga in</button>
+                                            ))}
+                                        </div>
+                                        <div className="p-2 border-b border-slate-800">
+                                            <button onClick={handleNewBatch} className="w-full py-2 border-2 border-dashed border-slate-700 rounded text-slate-400 hover:text-orange-300 text-xs font-bold uppercase flex justify-center gap-2"><Icon name="Plus" size={14}/> Ny Batch</button>
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                                            {savedBatches.length === 0 ? <p className="text-center text-xs text-slate-600 py-4 italic">Tomt här...</p> : 
+                                            savedBatches.map(b => (
+                                                <div key={b.id} onClick={() => handleLoadBatch(b)} className={`p-2 rounded border cursor-pointer relative ${currentBatchId === b.id ? 'bg-orange-500/10 border-orange-500/40' : 'bg-slate-800/50 border-slate-800 hover:bg-slate-800'}`}>
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <span className={`text-sm font-medium truncate pr-6 ${currentBatchId === b.id ? 'text-orange-300' : 'text-slate-300'}`}>{b.name}</span>
+                                                        <button onClick={(e) => {e.stopPropagation(); setBatchToDelete(b.id); setShowDeleteModal(true);}} className="text-slate-600 hover:text-red-400 absolute top-2 right-2"><Icon name="Trash2" size={14}/></button>
+                                                    </div>
+                                                    <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                                                        <span>OG: {b.og}</span>
+                                                        <span>{b.startDate} ({getDaysSince(b.startDate)}d)</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="p-2 border-t border-slate-800 bg-slate-950/50 flex justify-between">
+                                            <button onClick={() => fileInputRef.current.click()} className="text-[10px] text-slate-500 hover:text-orange-300 flex gap-1 items-center"><Icon name="Upload" size={12}/> Importera</button>
+                                            <button onClick={handleExportData} className="text-[10px] text-slate-500 hover:text-orange-300 flex gap-1 items-center"><Icon name="Download" size={12}/> Exportera</button>
+                                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
 
-      {/* Main Content - Now centered single column */}
-      <main className="flex-1 p-4 overflow-y-auto custom-scrollbar">
-        <div className="max-w-2xl mx-auto space-y-4 pb-10">
-
-          {/* Verktyg (Interaktion) */}
-          <section className="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-xl flex flex-col relative">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500/0 via-orange-500/50 to-orange-500/0"></div>
-            
-            <div className="flex items-center gap-2 mb-4 border-b border-orange-500/20 pb-3">
-              <div className="p-1.5 bg-orange-500/10 rounded-md text-orange-400">
-                <Wrench size={16} />
-              </div>
-              <h2 className="text-sm font-semibold text-orange-300 uppercase tracking-wider">Verktyg</h2>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {/* Batchens namn */}
-              <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Batchens namn</label>
-                <input 
-                  type="text"
-                  value={batchName}
-                  onChange={(e) => setBatchName(e.target.value)}
-                  placeholder="Skriv in namn på batchen..."
-                  className={`w-full bg-slate-950/50 border rounded-md px-3 py-2 text-sm text-orange-100 placeholder-slate-600 focus:outline-none focus:ring-1 transition-all font-medium ${nameError ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/50 animate-pulse' : 'border-slate-700 focus:border-orange-500/50 focus:ring-orange-500/50'}`}
-                />
-              </div>
-
-              {/* Startdatum */}
-              <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Startdatum</label>
-                <div className="relative">
-                  <input 
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-3 py-2 text-sm text-orange-100 placeholder-slate-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all font-medium appearance-none [color-scheme:dark]"
-                  />
-                  <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-orange-400/70">
-                    <Calendar size={14} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Ingredienser */}
-              <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Ingredienser</label>
-                <textarea 
-                  rows={5}
-                  value={ingredients}
-                  onChange={(e) => setIngredients(e.target.value)}
-                  placeholder="Lista dina ingredienser här..."
-                  className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-3 py-2 text-sm text-orange-100 placeholder-slate-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all font-medium resize-none custom-scrollbar"
-                />
-              </div>
-
-              {/* Original Gravity Section */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-px flex-1 bg-slate-700/50"></div>
-                  <span className="text-[10px] font-bold text-orange-400/50 uppercase tracking-wider">Original Gravity</span>
-                  <div className="h-px flex-1 bg-slate-700/50"></div>
-                </div>
-                
-                <div className="flex gap-3">
-                  {/* OG - Öchsle */}
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3">
-                    <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Öchsle (°Oe)</label>
-                    <div className="relative">
-                      <select 
-                        value={og}
-                        onChange={(e) => setOg(e.target.value)}
-                        className="w-full bg-slate-950/50 border border-slate-700 rounded-md pl-3 pr-8 py-2 text-sm text-orange-100 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all font-medium appearance-none cursor-pointer hover:bg-slate-900"
-                      >
-                        {oechsleOptions.map((val) => (
-                          <option key={val} value={val} className="bg-slate-900">{val}</option>
-                        ))}
-                      </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-orange-400/70">
-                        <ChevronDown size={14} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* OG - Temperatur */}
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3">
-                    <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Temperatur (°C)</label>
-                    <input 
-                      type="number" 
-                      value={ogTemp}
-                      onChange={(e) => setOgTemp(e.target.value)}
-                      placeholder="20"
-                      className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-3 py-2 text-sm text-orange-100 placeholder-slate-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all font-medium appearance-none"
-                    />
-                  </div>
-
-                  {/* OG - Potentiell ABV */}
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3 flex flex-col justify-center relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Activity size={32} className="text-orange-500" />
-                    </div>
-                    <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Potentiell ABV</label>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-orange-400 tracking-tight">{potentialABV}</span>
-                      <span className="text-xs font-medium text-orange-500/60">%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Aktuell/Final Gravity Section */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-px flex-1 bg-slate-700/50"></div>
-                  <span className="text-[10px] font-bold text-orange-400/50 uppercase tracking-wider">Aktuell / Final Gravity</span>
-                  {/* Spara-knapp för logg */}
-                  <button 
-                    onClick={handleAddLogEntry}
-                    className="flex items-center justify-center p-1 rounded hover:bg-orange-500/20 text-orange-400 transition-colors"
-                    title="Spara mätvärde till logg"
-                  >
-                    <Save size={14} />
-                  </button>
-                  <div className="h-px flex-1 bg-slate-700/50"></div>
-                </div>
-
-                <div className="flex gap-3">
-                  {/* FG - Öchsle */}
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3">
-                    <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Öchsle (°Oe)</label>
-                    <div className="relative">
-                      <select 
-                        value={fg}
-                        onChange={(e) => setFg(e.target.value)}
-                        className="w-full bg-slate-950/50 border border-slate-700 rounded-md pl-3 pr-8 py-2 text-sm text-orange-100 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all font-medium appearance-none cursor-pointer hover:bg-slate-900"
-                      >
-                         {oechsleOptions.map((val) => (
-                          <option key={val} value={val} className="bg-slate-900">{val}</option>
-                        ))}
-                      </select>
-                      <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-orange-400/70">
-                        <ChevronDown size={14} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* FG - Temperatur */}
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3">
-                    <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Temperatur (°C)</label>
-                    <input 
-                      type="number" 
-                      value={fgTemp}
-                      onChange={(e) => setFgTemp(e.target.value)}
-                      placeholder="20"
-                      className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-3 py-2 text-sm text-orange-100 placeholder-slate-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all font-medium appearance-none"
-                    />
-                  </div>
-
-                  {/* FG - Aktuell ABV */}
-                  <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3 flex flex-col justify-center relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-20 transition-opacity">
-                      <Droplets size={32} className="text-orange-500" />
-                    </div>
-                    <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Aktuell ABV</label>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-orange-400 tracking-tight">{currentABV}</span>
-                      <span className="text-xs font-medium text-orange-500/60">%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Utjäsning */}
-              <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                <div className="space-y-2">
-                  <div>
-                    <div className="flex justify-between text-[10px] mb-1.5">
-                      <span className="text-orange-200 uppercase font-bold opacity-70">Utjäsning (Beräknad)</span>
-                      <div className="flex gap-2">
-                        <span className="text-orange-300 italic">{sweetness}</span>
-                        <span className="text-orange-400 font-mono border-l border-slate-700 pl-2">{attenuation}%</span>
-                      </div>
-                    </div>
-                    <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ 
-                          width: `${Math.min(attenuation, 100)}%`,
-                          // Dynamisk färgskala: Orange (30) till Grön (120) baserat på %
-                          backgroundColor: `hsl(${30 + (Math.min(parseFloat(attenuation) || 0, 100) * 0.9)}, 90%, 50%)`
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Logg - Nu i egen box, med extern rubrik */}
-              <div className="space-y-1 relative">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="h-px flex-1 bg-slate-700/50"></div>
-                  
-                  {/* Header med Logg text och ikoner */}
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={handleAddDateOnly}
-                      className="flex items-center gap-1 group hover:bg-orange-500/10 px-2 py-0.5 rounded transition-colors"
-                      title="Klicka för att infoga dagens datum"
-                    >
-                      <FileText size={12} className="text-orange-400/50 group-hover:text-orange-400 transition-colors" />
-                      <span className="text-[10px] font-bold text-orange-400/50 group-hover:text-orange-400 uppercase tracking-wider transition-colors">Logg</span>
-                    </button>
-
-                    {/* PÅMINNELSE-KNAPP */}
-                    <div className="relative">
-                      <button 
-                        onClick={() => setShowReminderMenu(!showReminderMenu)}
-                        className={`flex items-center gap-1 group hover:bg-orange-500/10 px-1.5 py-0.5 rounded transition-colors ${showReminderMenu ? 'bg-orange-500/10 text-orange-400' : 'text-orange-400/50'}`}
-                        title="Skapa påminnelse i kalendern"
-                      >
-                        <Bell size={12} className={`group-hover:text-orange-400 transition-colors ${showReminderMenu ? 'text-orange-400' : ''}`} />
-                      </button>
-                      
-                      {/* PÅMINNELSE MENY - UPDATERAD */}
-                      {showReminderMenu && (
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-2 flex flex-col gap-2 w-48 z-20">
-                          
-                          {/* Välj aktivitetstyp */}
-                          <div className="px-1">
-                            <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Aktivitet</label>
-                            <select 
-                              value={reminderType}
-                              onChange={(e) => setReminderType(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-600 rounded text-xs text-slate-300 p-1 focus:outline-none focus:border-orange-500"
+                            <div className="h-5 w-px bg-slate-800 mx-1"></div>
+                            <button 
+                                onClick={handleSaveBatch} 
+                                disabled={isSaving}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-orange-500/20 active:scale-95 transition-all ${isSaving ? 'opacity-50 cursor-not-allowed bg-orange-500/10 text-orange-400' : 'text-orange-400 hover:bg-orange-500/10'}`}
                             >
-                              <option value="measure">Mät Gravity</option>
-                              <option value="rack">Tappa om</option>
-                              <option value="feed">Tillsätt näring</option>
-                              <option value="sweeten">Eftersöta</option>
-                              <option value="bottle">Buteljera</option>
-                            </select>
-                          </div>
-
-                          <div className="h-px bg-slate-700 my-0.5"></div>
-
-                          {/* Välj tid */}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] font-bold text-orange-400/70 uppercase px-1">När?</label>
-                            {reminderType === 'feed' ? (
-                              <>
-                                <button onClick={() => handleCreateReminder(1)} className="text-[10px] text-left px-2 py-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-orange-200">Om 24 timmar (Dag 1)</button>
-                                <button onClick={() => handleCreateReminder(2)} className="text-[10px] text-left px-2 py-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-orange-200">Om 48 timmar (Dag 2)</button>
-                                <button onClick={() => handleCreateReminder(3)} className="text-[10px] text-left px-2 py-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-orange-200">Om 72 timmar (Dag 3)</button>
-                                <button onClick={() => handleCreateReminder(7)} className="text-[10px] text-left px-2 py-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-orange-200">Om 1 vecka (Dag 7)</button>
-                              </>
-                            ) : (
-                              <>
-                                <button onClick={() => handleCreateReminder(3)} className="text-[10px] text-left px-2 py-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-orange-200">Om 3 dagar</button>
-                                <button onClick={() => handleCreateReminder(7)} className="text-[10px] text-left px-2 py-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-orange-200">Om 1 vecka</button>
-                                <button onClick={() => handleCreateReminder(14)} className="text-[10px] text-left px-2 py-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-orange-200">Om 2 veckor</button>
-                                <button onClick={() => handleCreateReminder(30)} className="text-[10px] text-left px-2 py-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-orange-200">Om 1 månad</button>
-                              </>
-                            )}
-                          </div>
+                                <Icon name="Save" size={16} className={isSaving ? "saving-pulse" : ""}/> 
+                                <span className="text-xs font-medium hidden sm:inline">{isSaving ? 'Sparar...' : 'Spara'}</span>
+                            </button>
                         </div>
-                      )}
-                    </div>
-                  </div>
+                    </header>
 
-                  <div className="h-px flex-1 bg-slate-700/50"></div>
+                    {/* MAIN CONTENT */}
+                    <main className="flex-1 p-4 overflow-y-auto custom-scrollbar">
+                        <div className="max-w-2xl mx-auto space-y-4 pb-10">
+                            <section className="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500/0 via-orange-500/50 to-orange-500/0"></div>
+                                <div className="flex items-center gap-2 mb-4 border-b border-orange-500/20 pb-3">
+                                    <div className="p-1.5 bg-orange-500/10 rounded-md text-orange-400"><Icon name="Wrench" size={16}/></div>
+                                    <h2 className="text-sm font-semibold text-orange-300 uppercase tracking-wider">Verktyg</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                        <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Batchens Namn</label>
+                                        <input type="text" value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="Skriv in namn..." className={`w-full bg-slate-950/50 border rounded-md px-3 py-2 text-sm text-orange-100 focus:outline-none focus:ring-1 ${nameError ? 'border-red-500/50 focus:border-red-500' : 'border-slate-700 focus:border-orange-500/50'}`}/>
+                                    </div>
+
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                        <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Startdatum</label>
+                                        <div className="relative">
+                                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-3 py-2 text-sm text-orange-100 focus:outline-none focus:border-orange-500/50" style={{colorScheme:'dark'}}/>
+                                            <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-orange-400/70"><Icon name="Calendar" size={14}/></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                        <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Ingredienser</label>
+                                        <textarea rows="5" value={ingredients} onChange={e => setIngredients(e.target.value)} placeholder="Honung, vatten, jäst..." className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-3 py-2 text-sm text-orange-100 focus:outline-none focus:border-orange-500/50 resize-none custom-scrollbar"/>
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1"><div className="h-px flex-1 bg-slate-700/50"></div><span className="text-[10px] font-bold text-orange-400/50 uppercase">Original Gravity</span><div className="h-px flex-1 bg-slate-700/50"></div></div>
+                                        <div className="flex gap-3">
+                                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3">
+                                                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Öchsle (°Oe)</label>
+                                                <div className="relative">
+                                                    <select value={og} onChange={e => setOg(e.target.value)} className="w-full bg-slate-950/50 border border-slate-700 rounded-md pl-2 pr-6 py-2 text-sm text-orange-100 appearance-none focus:outline-none hover:bg-slate-900">
+                                                        {oechsleOptions.map(v => <option key={v} value={v} className="bg-slate-900">{v}</option>)}
+                                                    </select>
+                                                    <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none text-orange-400/70"><Icon name="ChevronDown" size={14}/></div>
+                                                </div>
+                                            </div>
+                                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3">
+                                                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Temp (°C)</label>
+                                                <input type="number" value={ogTemp} onChange={e => setOgTemp(e.target.value)} className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-2 py-2 text-sm text-orange-100 focus:outline-none"/>
+                                            </div>
+                                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3 relative overflow-hidden">
+                                                <div className="absolute top-0 right-0 p-1 opacity-10"><Icon name="Activity" size={32} className="text-orange-500"/></div>
+                                                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Potentiell ABV</label>
+                                                <div className="flex items-baseline gap-1"><span className="text-2xl font-bold text-orange-400 tracking-tight">{potentialABV}</span><span className="text-xs font-medium text-orange-500/60">%</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1"><div className="h-px flex-1 bg-slate-700/50"></div><span className="text-[10px] font-bold text-orange-400/50 uppercase">Aktuell / Final Gravity</span>
+                                            <button onClick={handleAddLogEntry} className="flex items-center p-1 rounded hover:bg-orange-500/20 text-orange-400 transition-colors" title="Logga mätvärde"><Icon name="Save" size={14}/></button>
+                                        <div className="h-px flex-1 bg-slate-700/50"></div></div>
+                                        <div className="flex gap-3">
+                                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3">
+                                                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Öchsle (°Oe)</label>
+                                                <div className="relative">
+                                                    <select value={fg} onChange={e => setFg(e.target.value)} className="w-full bg-slate-950/50 border border-slate-700 rounded-md pl-2 pr-6 py-2 text-sm text-orange-100 appearance-none focus:outline-none hover:bg-slate-900">
+                                                        {oechsleOptions.map(v => <option key={v} value={v} className="bg-slate-900">{v}</option>)}
+                                                    </select>
+                                                    <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none text-orange-400/70"><Icon name="ChevronDown" size={14}/></div>
+                                                </div>
+                                            </div>
+                                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3">
+                                                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Temp (°C)</label>
+                                                <input type="number" value={fgTemp} onChange={e => setFgTemp(e.target.value)} className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-2 py-2 text-sm text-orange-100 focus:outline-none"/>
+                                            </div>
+                                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 w-1/3 relative overflow-hidden">
+                                                <div className="absolute top-0 right-0 p-1 opacity-10"><Icon name="Droplets" size={32} className="text-orange-500"/></div>
+                                                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Aktuell ABV</label>
+                                                <div className="flex items-baseline gap-1"><span className="text-2xl font-bold text-orange-400 tracking-tight">{currentABV}</span><span className="text-xs font-medium text-orange-500/60">%</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                        <div className="flex justify-between text-[10px] mb-1.5">
+                                            <span className="text-orange-200 uppercase font-bold opacity-70">Utjäsning</span>
+                                            <div className="flex gap-2"><span className="text-orange-300 italic">{sweetness}</span><span className="text-orange-400 font-mono border-l border-slate-700 pl-2">{attenuation}%</span></div>
+                                        </div>
+                                        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(attenuation, 100)}%`, backgroundColor: `hsl(${30 + (Math.min(parseFloat(attenuation) || 0, 100) * 0.9)}, 90%, 50%)` }}></div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="h-px flex-1 bg-slate-700/50"></div>
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={handleAddDateOnly} className="flex items-center gap-1 group hover:bg-orange-500/10 px-2 py-0.5 rounded transition-colors">
+                                                    <Icon name="FileText" size={12} className="text-orange-400/50 group-hover:text-orange-400"/>
+                                                    <span className="text-[10px] font-bold text-orange-400/50 group-hover:text-orange-400 uppercase tracking-wider">Logg</span>
+                                                </button>
+                                                <div className="relative">
+                                                    <button onClick={() => setShowReminderMenu(!showReminderMenu)} className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${showReminderMenu ? 'bg-orange-500/10 text-orange-400' : 'text-orange-400/50 hover:bg-orange-500/10'}`} title="Påminnelse">
+                                                        <Icon name="Bell" size={12}/>
+                                                    </button>
+                                                    {showReminderMenu && (
+                                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-2 w-48 z-20">
+                                                            <div className="px-1 mb-1">
+                                                                <label className="text-[10px] font-bold text-orange-400/70 uppercase">Aktivitet</label>
+                                                                <select value={reminderType} onChange={e => setReminderType(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded text-xs text-slate-300 p-1 focus:outline-none">
+                                                                    <option value="measure">Mät Gravity</option>
+                                                                    <option value="feed">Tillsätt näring</option>
+                                                                    <option value="rack">Tappa om</option>
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1 mt-1">
+                                                                <button onClick={() => handleCreateReminder(3)} className="text-[10px] text-left px-2 py-1 hover:bg-slate-700 rounded">Om 3 dagar</button>
+                                                                <button onClick={() => handleCreateReminder(7)} className="text-[10px] text-left px-2 py-1 hover:bg-slate-700 rounded">Om 1 vecka</button>
+                                                                <button onClick={() => handleCreateReminder(14)} className="text-[10px] text-left px-2 py-1 hover:bg-slate-700 rounded">Om 2 veckor</button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="h-px flex-1 bg-slate-700/50"></div>
+                                        </div>
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                            <textarea rows="5" value={log} onChange={e => setLog(e.target.value)} placeholder="Skriv logg här..." className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-3 py-2 text-sm text-orange-100 focus:outline-none focus:border-orange-500/50 resize-none custom-scrollbar font-mono leading-relaxed mb-3"/>
+                                            
+                                            {graphData.length > 1 && (
+                                                <div className="mt-2 pt-2 border-t border-slate-700/50">
+                                                    <div className="flex items-center gap-2 mb-2 text-orange-400/50"><Icon name="TrendingDown" size={12}/><span className="text-[10px] uppercase font-bold tracking-wider">Jäskurva</span></div>
+                                                    <div className="h-24 w-full relative">
+                                                        <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                            {[0,25,50,75,100].map(y => <line key={y} x1="0" y1={y} x2="100" y2={y} stroke="rgba(148,163,184,0.1)" strokeWidth="1" vectorEffect="non-scaling-stroke"/>)}
+                                                            <path d={`M ${graphData.map((pt, i) => {
+                                                                const x = (i / (graphData.length - 1)) * 100;
+                                                                const maxVal = Math.max(...graphData.map(d => d.value)) + 5;
+                                                                const minVal = Math.min(...graphData.map(d => d.value)) - 5;
+                                                                const y = 100 - ((pt.value - minVal) / (maxVal - minVal) * 100);
+                                                                return `${x} ${y}`;
+                                                            }).join(' L ')}`} fill="none" stroke="rgba(251, 146, 60, 0.6)" strokeWidth="2" strokeDasharray="4 4" vectorEffect="non-scaling-stroke"/>
+                                                        </svg>
+                                                        {graphData.map((pt, i) => {
+                                                            const x = (i / (graphData.length - 1)) * 100;
+                                                            const maxVal = Math.max(...graphData.map(d => d.value)) + 5;
+                                                            const minVal = Math.min(...graphData.map(d => d.value)) - 5;
+                                                            const y = 100 - ((pt.value - minVal) / (maxVal - minVal) * 100);
+                                                            return <div key={i} className={`absolute w-1.5 h-1.5 rounded-full -ml-[3px] -mt-[3px] border border-orange-400 ${pt.type==='start'?'bg-slate-900':'bg-orange-400'}`} style={{left: `${x}%`, top: `${y}%`}} title={`${pt.value} °Oe`}/>;
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </main>
                 </div>
-                
-                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                  <textarea 
-                    rows={5}
-                    value={log}
-                    onChange={(e) => setLog(e.target.value)}
-                    placeholder="Här sparas dina mätningar, men du kan också skriva egna anteckningar..."
-                    className="w-full bg-slate-950/50 border border-slate-700 rounded-md px-3 py-2 text-sm text-orange-100 placeholder-slate-600 focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all font-medium resize-none custom-scrollbar font-mono leading-relaxed mb-3"
-                  />
-
-                  {/* GRAF */}
-                  {graphData.length > 1 && (
-                    <div className="mt-2 pt-2 border-t border-slate-700/50">
-                      <div className="flex items-center gap-2 mb-2 text-orange-400/50">
-                        <TrendingDown size={12} />
-                        <span className="text-[10px] uppercase font-bold tracking-wider">Jäskurva</span>
-                      </div>
-                      
-                      <div className="h-24 w-full flex items-end justify-between gap-1 px-1 relative">
-                        {/* Enkel SVG Graf */}
-                        <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                            {/* Stödlinjer (Grid) - Horisontella */}
-                            {[0, 25, 50, 75, 100].map((lineY) => (
-                                <line 
-                                    key={`h-${lineY}`}
-                                    x1="0" y1={lineY} 
-                                    x2="100" y2={lineY} 
-                                    stroke="rgba(148, 163, 184, 0.1)" 
-                                    strokeWidth="1"
-                                    vectorEffect="non-scaling-stroke"
-                                />
-                            ))}
-
-                            {/* Stödlinjer (Grid) - Vertikala (vid datapunkter) */}
-                            {graphData.map((_, i) => {
-                                const x = (i / (graphData.length - 1)) * 100;
-                                return (
-                                    <line 
-                                        key={`v-${i}`}
-                                        x1={x} y1="0" 
-                                        x2={x} y2="100" 
-                                        stroke="rgba(148, 163, 184, 0.1)" 
-                                        strokeWidth="1"
-                                        vectorEffect="non-scaling-stroke"
-                                    />
-                                )
-                            })}
-
-                          <path 
-                            d={`M ${graphData.map((pt, i) => {
-                              // X: Procent av bredden
-                              const x = (i / (graphData.length - 1)) * 100;
-                              // Y: Normalisera värde mellan min och max (inverterat för graf)
-                              const maxVal = Math.max(...graphData.map(d => d.value)) + 5;
-                              const minVal = Math.min(...graphData.map(d => d.value)) - 5;
-                              const range = maxVal - minVal;
-                              const y = 100 - ((pt.value - minVal) / range * 100);
-                              return `${x} ${y}`;
-                            }).join(' L ')}`}
-                            fill="none" 
-                            stroke="rgba(251, 146, 60, 0.6)" 
-                            strokeWidth="2"
-                            strokeDasharray="4 4"
-                            vectorEffect="non-scaling-stroke"
-                          />
-                        </svg>
-                        
-                        {/* Punkter (DOM Element ovanpå SVG) */}
-                        {graphData.map((pt, i) => {
-                             const x = (i / (graphData.length - 1)) * 100;
-                             const maxVal = Math.max(...graphData.map(d => d.value)) + 5;
-                             const minVal = Math.min(...graphData.map(d => d.value)) - 5;
-                             const range = maxVal - minVal;
-                             const y = 100 - ((pt.value - minVal) / range * 100);
-                             return (
-                               <div 
-                                key={i}
-                                className={`absolute w-1.5 h-1.5 rounded-full -ml-[3px] -mt-[3px] border border-orange-400 ${pt.type === 'start' ? 'bg-slate-900' : 'bg-orange-400'}`}
-                                style={{ left: `${x}%`, top: `${y}%` }}
-                               />
-                             );
-                          })}
-                        
-                        {/* Datum etiketter (bara första och sista om många) */}
-                        {graphData.map((pt, i) => {
-                           if (i === 0 || i === graphData.length - 1 || (graphData.length < 6) || (i % Math.ceil(graphData.length/4) === 0)) {
-                               return (
-                                 <div key={i} className="text-[8px] text-slate-500 absolute -bottom-4 transform -translate-x-1/2 whitespace-nowrap" style={{ left: `${(i / (graphData.length - 1)) * 100}%` }}>
-                                   {pt.displayDate}
-                                 </div>
-                               )
-                           }
-                           return null;
-                        })}
-                      </div>
-                      <div className="h-4"></div> {/* Spacer för datum */}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
-          </section>
-
-        </div>
-      </main>
-
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
+            );
         }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(30, 41, 59, 0.5); 
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(251, 146, 60, 0.2); 
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(251, 146, 60, 0.4); 
-        }
-      `}</style>
-    </div>
-  );
-}
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
