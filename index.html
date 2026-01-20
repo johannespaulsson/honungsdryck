@@ -85,7 +85,12 @@ export default function App() {
 
   // --- TAILWIND FIX & AUTH ---
   useEffect(() => {
-    if (!document.getElementById('tailwind-cdn')) {
+    // 1. Ladda Tailwind manuellt om det saknas (Fixar vit skärm på GitHub om lokal build failar)
+    // Vi kollar om vi har några stilar applicerade eller om scriptet redan finns
+    const isTailwindLoaded = !!window.tailwind || document.getElementById('tailwind-cdn');
+    
+    if (!isTailwindLoaded) {
+      console.log("Laddar Tailwind CSS via CDN...");
       const script = document.createElement('script');
       script.id = 'tailwind-cdn';
       script.src = "https://cdn.tailwindcss.com";
@@ -485,7 +490,10 @@ export default function App() {
   const oechsleOptions = Array.from({ length: 136 }, (_, i) => i - 15);
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-900 text-orange-100 font-sans selection:bg-orange-500/30 relative overflow-hidden">
+    <div 
+      className="min-h-screen flex flex-col bg-slate-900 text-orange-100 font-sans selection:bg-orange-500/30 relative overflow-hidden"
+      style={{ backgroundColor: '#0f172a', color: '#ffedd5' }} // Fallback styles
+    >
       
       {/* DELETE CONFIRMATION MODAL */}
       {showDeleteModal && (
