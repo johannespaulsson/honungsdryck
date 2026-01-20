@@ -17,8 +17,6 @@ const userFirebaseConfig = {
 };
 
 // Logik för att välja rätt konfiguration
-// 1. Om vi är i Canvas/Förhandsgranskning: Använd miljöns config (__firebase_config)
-// 2. Annars (t.ex. GitHub Pages): Använd dina hårdkodade nycklar (userFirebaseConfig)
 let firebaseConfig;
 if (typeof __firebase_config !== 'undefined') {
   try {
@@ -75,10 +73,18 @@ export default function App() {
 
   const fileInputRef = useRef(null);
 
-  // --- FIREBASE AUTHENTICATION ---
+  // --- TAILWIND FIX & AUTH ---
   useEffect(() => {
+    // 1. Ladda Tailwind manuellt om det saknas (Fixar vit skärm)
+    if (!document.getElementById('tailwind-cdn')) {
+      const script = document.createElement('script');
+      script.id = 'tailwind-cdn';
+      script.src = "https://cdn.tailwindcss.com";
+      document.head.appendChild(script);
+    }
+
+    // 2. Hantera Inloggning
     const initAuth = async () => {
-      // Prioritera custom token om den finns (Canvas miljö)
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
         try {
           await signInWithCustomToken(auth, __initial_auth_token);
@@ -87,7 +93,6 @@ export default function App() {
           await signInAnonymously(auth);
         }
       } else {
-        // Annars (GitHub Pages) kör anonymt
         await signInAnonymously(auth).catch((error) => {
            console.error("Inloggning misslyckades", error);
         });
@@ -1084,3 +1089,5 @@ export default function App() {
     </div>
   );
 }
+
+
