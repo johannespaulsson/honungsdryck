@@ -8,19 +8,18 @@
     <!-- 1. Hämta designmotorn (Tailwind CSS) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. Hämta React (Motorn som driver appen) -->
+    <!-- 2. Hämta React -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- 3. Hämta Babel (Översätter koden så webbläsaren förstår den) -->
+    <!-- 3. Hämta Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 4. Hämta Firebase (Databasen) -->
+    <!-- 4. Hämta Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-    <!-- Grundläggande stilar för att slippa vit skärm vid laddning -->
     <style>
         body { background-color: #0f172a; color: #ffedd5; font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -34,11 +33,9 @@
 <body>
     <div id="root"></div>
 
-    <!-- HÄR BÖRJAR APPEN -->
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- IKONER (Hårdkodade SVG:er) ---
         const Icon = ({ name, size = 24, className = "" }) => {
             const icons = {
                 Wrench: <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
@@ -60,7 +57,8 @@
                 FolderOpen: <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/>,
                 LogIn: <><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></>,
                 LogOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></>,
-                User: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>
+                User: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+                AlertTriangle: <><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -69,7 +67,6 @@
             );
         };
 
-        // --- FIREBASE KONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyDGmN-60JoFMFyKNtEVR4sRf258GTv2jU4",
             authDomain: "mjodbryggning.firebaseapp.com",
@@ -80,28 +77,25 @@
             measurementId: "G-1GDMF1NNQ4"
         };
 
-        // Initiera Firebase
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
         const appId = "mjodbryggning-live"; 
 
-        // --- HUVUDKOMPONENT ---
         function App() {
-            // STATE
             const [user, setUser] = useState(null);
             const [isOffline, setIsOffline] = useState(false);
-            const [isSaving, setIsSaving] = useState(false); // Nytt state för att förhindra dubbel-sparning
+            const [isSaving, setIsSaving] = useState(false);
             const [currentBatchId, setCurrentBatchId] = useState(null);
             const [showInfo, setShowInfo] = useState(false);
             const [showBatchMenu, setShowBatchMenu] = useState(false);
             const [showDeleteModal, setShowDeleteModal] = useState(false);
+            const [showNewBatchConfirm, setShowNewBatchConfirm] = useState(false); 
             const [batchToDelete, setBatchToDelete] = useState(null);
             const [showReminderMenu, setShowReminderMenu] = useState(false);
             const [reminderType, setReminderType] = useState('measure');
             const [nameError, setNameError] = useState(false);
             
-            // DATA STATE
             const [batchName, setBatchName] = useState('');
             const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
             const [ingredients, setIngredients] = useState('');
@@ -115,7 +109,6 @@
             const fileInputRef = useRef(null);
             const batchMenuRef = useRef(null);
 
-            // AUTHENTICATION
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged((u) => {
                     if (u) {
@@ -123,7 +116,7 @@
                         setIsOffline(false);
                     } else {
                         auth.signInAnonymously().catch((error) => {
-                            console.warn("Firebase anslutning misslyckades, kör offline.", error);
+                            console.warn("Firebase offline", error);
                             setIsOffline(true);
                             const localData = localStorage.getItem('mjod_batches');
                             if (localData) {
@@ -137,13 +130,12 @@
                 return () => unsubscribe();
             }, []);
 
-            // DATA SYNC
             useEffect(() => {
                 if (!user || isOffline) return;
                 const unsubscribe = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches')
                     .onSnapshot((snapshot) => {
                         const batches = snapshot.docs.map(doc => ({
-                            id: doc.id, // Behåll ID som sträng
+                            id: doc.id,
                             ...doc.data()
                         }));
                         setSavedBatches(batches.sort((a, b) => (b.id > a.id ? 1 : -1)));
@@ -154,7 +146,6 @@
                 return () => unsubscribe();
             }, [user, isOffline]);
 
-            // KLICKA UTANFÖR MENY
             useEffect(() => {
                 function handleClickOutside(event) {
                     if (batchMenuRef.current && !batchMenuRef.current.contains(event.target)) {
@@ -165,7 +156,6 @@
                 return () => document.removeEventListener("mousedown", handleClickOutside);
             }, [batchMenuRef]);
 
-            // --- BERÄKNINGAR ---
             const getCorrectedGravity = (g, t) => {
                 const grav = parseFloat(g);
                 const temp = parseFloat(t);
@@ -212,7 +202,6 @@
                 return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
             };
 
-            // --- GRAF ---
             const getGraphData = () => {
                 const dataPoints = [];
                 if (og > 0 && startDate) {
@@ -247,11 +236,15 @@
             const graphData = getGraphData();
             const oechsleOptions = Array.from({ length: 136 }, (_, i) => i - 15);
 
-            // --- ACTIONS ---
             const handleGoogleLogin = async () => {
-                if (isOffline) return alert("Kontrollera nätverket.");
                 const provider = new firebase.auth.GoogleAuthProvider();
-                try { await auth.signInWithPopup(provider); } catch (error) { alert("Inloggning misslyckades."); }
+                try { 
+                    await auth.signInWithPopup(provider); 
+                } catch (error) { 
+                    // Visa exakt felkod för att hjälpa användaren
+                    alert("Inloggning misslyckades: " + error.code + "\n" + error.message);
+                    console.error(error);
+                }
             };
 
             const handleLogout = async () => {
@@ -275,7 +268,7 @@
 
             const handleSaveBatch = async () => {
                 if (!batchName.trim()) return setNameError(true);
-                if (isSaving) return; // Stoppa om redan sparar
+                if (isSaving) return;
 
                 setIsSaving(true);
                 setNameError(false);
@@ -290,25 +283,24 @@
                 };
 
                 try {
+                    let finalId = currentBatchId;
+                    if (!finalId) {
+                        finalId = Date.now().toString();
+                        setCurrentBatchId(finalId);
+                    }
+
                     if (isOffline || !user) {
+                        const existing = savedBatches.find(b => b.id === finalId);
                         let newBatches;
-                        let finalId = currentBatchId;
-                        if (currentBatchId) {
-                            newBatches = savedBatches.map(b => b.id === currentBatchId ? { ...data, id: currentBatchId } : b);
+                        if (existing) {
+                            newBatches = savedBatches.map(b => b.id === finalId ? { ...data, id: finalId } : b);
                         } else {
-                            finalId = Date.now().toString();
                             newBatches = [...savedBatches, { ...data, id: finalId }];
-                            setCurrentBatchId(finalId);
                         }
                         const sorted = newBatches.sort((a, b) => (b.id > a.id ? 1 : -1));
                         setSavedBatches(sorted);
                         localStorage.setItem('mjod_batches', JSON.stringify(sorted));
                     } else {
-                        let finalId = currentBatchId;
-                        if (!finalId) {
-                            finalId = Date.now().toString();
-                            setCurrentBatchId(finalId);
-                        }
                         await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(finalId).set(data, { merge: true });
                     }
                 } catch (e) {
@@ -333,7 +325,11 @@
                 setShowBatchMenu(false);
             };
 
-            const handleNewBatch = () => {
+            const handleNewBatchClick = () => {
+                setShowNewBatchConfirm(true);
+            };
+
+            const proceedToNewBatch = () => {
                 setCurrentBatchId(null);
                 setBatchName('');
                 setStartDate(new Date().toISOString().split('T')[0]);
@@ -342,6 +338,7 @@
                 setOg(0); setOgTemp(20);
                 setFg(0); setFgTemp(20);
                 setNameError(false);
+                setShowNewBatchConfirm(false);
                 setShowBatchMenu(false);
             };
 
@@ -354,7 +351,7 @@
                     } else if (user) {
                         await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(batchToDelete).delete();
                     }
-                    if (currentBatchId === batchToDelete) handleNewBatch();
+                    if (currentBatchId === batchToDelete) proceedToNewBatch();
                     setShowDeleteModal(false);
                     setBatchToDelete(null);
                 }
@@ -384,7 +381,7 @@
                             let count = 0;
                             for(const b of data) {
                                 if(!currentIds.has(b.id)) {
-                                    const newId = (Date.now() + Math.floor(Math.random()*1000)).toString();
+                                    const newId = b.id || (Date.now() + Math.floor(Math.random()*1000)).toString();
                                     const {id, ...rest} = b;
                                     if (isOffline) {
                                         savedBatches.push({...rest, id: newId});
@@ -434,12 +431,6 @@
 
             return (
                 <div className="flex flex-col min-h-screen bg-slate-900 text-orange-100 selection:bg-orange-500/30">
-                    <style>{`
-                        body { background-color: #0f172a; color: #ffedd5; }
-                        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-                        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.5); }
-                        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(251, 146, 60, 0.2); border-radius: 4px; }
-                    `}</style>
                     
                     {/* MODALER */}
                     {showInfo && (
@@ -471,11 +462,27 @@
                         </div>
                     )}
 
+                    {showNewBatchConfirm && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowNewBatchConfirm(false)}>
+                            <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                                <h3 className="text-lg font-bold text-orange-400 mb-2 flex gap-2"><Icon name="AlertTriangle"/> Skapa ny batch?</h3>
+                                <p className="text-slate-300 text-sm mb-4 leading-relaxed">
+                                    Varning: Har du kommit ihåg att <span className="font-bold text-orange-300 underline">spara</span> dina ändringar? <br/>Osparad data på den nuvarande skärmen kommer att försvinna.
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    <button onClick={() => { handleSaveBatch(); setShowNewBatchConfirm(false); }} className="w-full bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold py-2 rounded transition-all">Spara nuvarande först</button>
+                                    <button onClick={proceedToNewBatch} className="w-full py-2 rounded hover:bg-slate-700 text-slate-400 text-xs">Fortsätt utan att spara</button>
+                                    <button onClick={() => setShowNewBatchConfirm(false)} className="w-full py-2 rounded bg-slate-700 hover:bg-slate-600 text-white text-xs">Avbryt</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* HEADER */}
                     <header className="flex-none p-4 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900/95 backdrop-blur z-40">
                         <div className="flex items-center gap-3">
                             <h1 className="text-xl font-bold tracking-tight text-orange-400">Mjödbryggning</h1>
-                            <span onClick={handleFillTestData} className="text-[10px] font-mono border border-orange-500/20 px-1.5 py-0.5 rounded cursor-pointer hover:text-orange-200" title="Ladda testdata">v1.1.0</span>
+                            <span onClick={handleFillTestData} className="text-[10px] font-mono border border-orange-500/20 px-1.5 py-0.5 rounded cursor-pointer hover:text-orange-200" title="Ladda testdata">v1.1.1</span>
                             <button onClick={() => setShowInfo(true)} className="text-slate-500 hover:text-orange-400"><Icon name="Info" size={18}/></button>
                         </div>
                         
@@ -496,7 +503,7 @@
                                             ))}
                                         </div>
                                         <div className="p-2 border-b border-slate-800">
-                                            <button onClick={handleNewBatch} className="w-full py-2 border-2 border-dashed border-slate-700 rounded text-slate-400 hover:text-orange-300 text-xs font-bold uppercase flex justify-center gap-2"><Icon name="Plus" size={14}/> Ny Batch</button>
+                                            <button onClick={handleNewBatchClick} className="w-full py-2 border-2 border-dashed border-slate-700 rounded text-slate-400 hover:text-orange-300 text-xs font-bold uppercase flex justify-center gap-2"><Icon name="Plus" size={14}/> Ny Batch</button>
                                         </div>
                                         <div className="max-h-60 overflow-y-auto custom-scrollbar p-2 space-y-1">
                                             {savedBatches.length === 0 ? <p className="text-center text-xs text-slate-600 py-4 italic">Tomt här...</p> : 
@@ -546,7 +553,10 @@
 
                                 <div className="space-y-4">
                                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                        <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Batchens Namn</label>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="text-[10px] font-bold text-orange-400/70 uppercase">Batchens Namn</label>
+                                            {currentBatchId && <span className="text-[9px] font-mono text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">#ID: {currentBatchId}</span>}
+                                        </div>
                                         <input type="text" value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="Skriv in namn..." className={`w-full bg-slate-950/50 border rounded-md px-3 py-2 text-sm text-orange-100 focus:outline-none focus:ring-1 ${nameError ? 'border-red-500/50 focus:border-red-500' : 'border-slate-700 focus:border-orange-500/50'}`}/>
                                     </div>
 
