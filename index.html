@@ -85,10 +85,14 @@ export default function App() {
 
   // --- TAILWIND FIX & AUTH ---
   useEffect(() => {
-    // 1. KATASTROF-SÄKRING: Injicera Tailwind CSS via CDN om det saknas
-    // Detta löser problemet med "bara text" på GitHub Pages om byggsteget misslyckades
+    // 1. STYLING-AKUTEN: Sätt färger direkt på body för att undvika vit skärm
+    document.body.style.backgroundColor = '#0f172a'; // Mörkblå
+    document.body.style.color = '#ffedd5'; // Ljusorange text
+    document.body.style.margin = '0';
+    document.body.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+    // 2. Ladda Tailwind manuellt om det saknas (Fixar layouten)
     const loadTailwind = () => {
-       // Kontrollera om tailwind-objektet finns eller om vi redan injicerat scriptet
        if (typeof window !== 'undefined' && !window.tailwind && !document.getElementById('tailwind-cdn-fallback')) {
           console.log("Tailwind saknas, injicerar CDN...");
           const script = document.createElement('script');
@@ -99,9 +103,7 @@ export default function App() {
        }
     };
     
-    // Kör direkt
     loadTailwind();
-    // Kör igen efter en stund ifall något annat script tog bort det
     setTimeout(loadTailwind, 1000);
 
     const initAuth = async () => {
@@ -1092,62 +1094,6 @@ export default function App() {
                 </div>
               </div>
 
-            </div>
-          </section>
-
-          {/* Kolumn 3: Sparade Batcher (Lista) */}
-          <section className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 flex flex-col shadow-lg backdrop-blur-sm">
-            <div className="flex items-center gap-2 mb-4 border-b border-orange-500/20 pb-3">
-              <div className="p-1.5 bg-orange-500/10 rounded-md text-orange-400">
-                <Archive size={16} />
-              </div>
-              <h2 className="text-sm font-semibold text-orange-300 uppercase tracking-wider">Sparade Batcher</h2>
-            </div>
-
-            <div className="space-y-2">
-              {/* Add New Batch Button */}
-              <button 
-                onClick={handleNewBatch}
-                className="w-full py-2.5 border-2 border-dashed border-slate-600 rounded-lg text-slate-400 hover:text-orange-300 hover:border-orange-400/50 hover:bg-slate-700/30 transition-all flex items-center justify-center gap-2 mb-3 group"
-              >
-                <Plus size={16} className="group-hover:scale-110 transition-transform"/>
-                <span className="text-sm">Ny Batch</span>
-              </button>
-
-              {/* Saved Items List */}
-              {savedBatches.length === 0 ? (
-                <div className="text-center py-8 px-4 text-slate-500 text-xs border border-slate-800 rounded-lg bg-slate-900/30">
-                  <p>Inga sparade batcher än.</p>
-                  <p className="mt-1.5 opacity-60">Fyll i dina värden till vänster och klicka på "Spara".</p>
-                </div>
-              ) : (
-                savedBatches.map((batch) => (
-                  <div 
-                    key={batch.id} 
-                    onClick={() => handleLoadBatch(batch)}
-                    className={`bg-slate-900/80 p-3 rounded-lg border border-slate-700/50 hover:border-orange-500/30 hover:bg-slate-800 transition-all group cursor-pointer relative ${currentBatchId === batch.id ? 'border-orange-500/50 ring-1 ring-orange-500/20' : ''}`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="pr-6 min-w-0">
-                        <h4 className="text-orange-200 font-medium text-sm truncate">{batch.name}</h4>
-                        <span className="text-[10px] text-slate-500 block mt-0.5">{batch.lastModified}</span>
-                      </div>
-                      <button 
-                        onClick={(e) => initiateDeleteBatch(e, batch.id)}
-                        className="text-slate-600 hover:text-red-400 transition-colors p-1 hover:bg-slate-900 rounded"
-                        title="Ta bort"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    {/* Liten preview av data */}
-                    <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between text-[10px] text-slate-400 font-mono">
-                      <span>OG: {batch.og}</span>
-                      <span>Start: {batch.startDate} ({getDaysSince(batch.startDate)} dagar)</span>
-                    </div>
-                  </div>
-                ))
-              )}
             </div>
           </section>
 
