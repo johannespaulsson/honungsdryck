@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Wrench, Archive, Plus, Save, Upload, Activity, Droplets, Trash2, Calendar, FileText, Download, Info, X, TrendingDown, Bell, ChevronDown, FolderOpen } from 'lucide-react';
+import { Wrench, Archive, Plus, Save, Upload, Activity, Droplets, Trash2, Calendar, FileText, Download, Info, X, TrendingDown, Bell, ChevronDown, FolderOpen, LogIn, LogOut, User } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
 // --- FIREBASE SETUP ---
@@ -44,7 +44,7 @@ export default function App() {
   const [showInfo, setShowInfo] = useState(false); 
   
   // UI States
-  const [showBatchMenu, setShowBatchMenu] = useState(false); // För dropdown-menyn
+  const [showBatchMenu, setShowBatchMenu] = useState(false); 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [batchToDelete, setBatchToDelete] = useState(null);
   const [showReminderMenu, setShowReminderMenu] = useState(false);
@@ -68,7 +68,7 @@ export default function App() {
   const [savedBatches, setSavedBatches] = useState([]);
 
   const fileInputRef = useRef(null);
-  const batchMenuRef = useRef(null); // För att kunna klicka utanför menyn
+  const batchMenuRef = useRef(null); 
 
   // --- EFFECT: Klicka utanför för att stänga meny ---
   useEffect(() => {
@@ -85,17 +85,26 @@ export default function App() {
 
   // --- TAILWIND FIX & AUTH ---
   useEffect(() => {
-    // 1. Ladda Tailwind manuellt om det saknas (Fixar vit skärm på GitHub om lokal build failar)
-    // Vi kollar om vi har några stilar applicerade eller om scriptet redan finns
-    const isTailwindLoaded = !!window.tailwind || document.getElementById('tailwind-cdn');
+    // KATASTROF-SÄKRING: Ladda designen manuellt om den saknas
+    const loadTailwind = () => {
+       if (!window.tailwind && !document.getElementById('tailwind-cdn-fallback')) {
+        console.log("Tailwind saknas, laddar reserv via CDN...");
+        const script = document.createElement('script');
+        script.id = 'tailwind-cdn-fallback';
+        script.src = "https://cdn.tailwindcss.com";
+        // När scriptet laddat, tvinga en uppdatering av gränssnittet om det behövs
+        script.onload = () => {
+            console.log("Tailwind laddat!");
+            // Trigga en omladdning av komponenten genom att uppdatera ett osynligt state om du vill, 
+            // men oftast löser webbläsaren detta automatiskt när CSS-klasserna blir tillgängliga.
+        };
+        document.head.appendChild(script);
+      }
+    };
     
-    if (!isTailwindLoaded) {
-      console.log("Laddar Tailwind CSS via CDN...");
-      const script = document.createElement('script');
-      script.id = 'tailwind-cdn';
-      script.src = "https://cdn.tailwindcss.com";
-      document.head.appendChild(script);
-    }
+    // Kör direkt och ge det en sekunds fördröjning också för säkerhets skull
+    loadTailwind();
+    setTimeout(loadTailwind, 1000);
 
     const initAuth = async () => {
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -118,6 +127,26 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // --- GOOGLE LOGIN ---
+  const handleGoogleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Google login failed", error);
+      alert("Kunde inte logga in med Google. Kontrollera att domänen är godkänd i Firebase Console.");
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      await signInAnonymously(auth);
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
 
   // --- FIREBASE DATA SYNC ---
   useEffect(() => {
@@ -374,7 +403,6 @@ export default function App() {
         await setDoc(docRef, batchData);
         setCurrentBatchId(newId);
       }
-      // Stäng menyn efter sparning om man vill? Nej, låt den vara.
     } catch (error) {
       console.error("Fel vid sparande:", error);
       alert("Kunde inte spara till molnet.");
@@ -491,8 +519,11 @@ export default function App() {
 
   return (
     <div 
-      className="min-h-screen flex flex-col bg-slate-900 text-orange-100 font-sans selection:bg-orange-500/30 relative overflow-hidden"
-      style={{ backgroundColor: '#0f172a', color: '#ffedd5' }} // Fallback styles
+      className="min-h-screen flex flex-col font-sans selection:bg-orange-500/30 relative overflow-hidden"
+      style={{ 
+        backgroundColor: '#0f172a', // Fallback mörkblå
+        color: '#ffedd5' // Fallback textfärg
+      }} 
     >
       
       {/* DELETE CONFIRMATION MODAL */}
@@ -599,13 +630,31 @@ export default function App() {
               title="Mina Batcher"
             >
               <FolderOpen size={16} className="group-hover:-translate-y-0.5 transition-transform" />
-              <span className="text-xs font-medium">Mina Batcher</span>
+              <span className="text-xs font-medium hidden sm:inline">Mina Batcher</span>
               <ChevronDown size={14} className={`transition-transform duration-200 ${showBatchMenu ? 'rotate-180' : ''}`}/>
             </button>
 
             {/* DROPDOWN CONTENT */}
             {showBatchMenu && (
               <div className="absolute right-0 top-full mt-2 w-80 max-h-[80vh] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                
+                {/* LOGIN STATUS HEADER */}
+                <div className="p-3 bg-slate-950/50 border-b border-slate-800 flex justify-between items-center">
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <User size={14}/>
+                        <span>{user && !user.isAnonymous ? 'Inloggad (Google)' : 'Gäst (Anonym)'}</span>
+                    </div>
+                    {user && !user.isAnonymous ? (
+                        <button onClick={handleLogout} className="text-[10px] text-orange-400 hover:underline flex items-center gap-1">
+                            <LogOut size={10}/> Logga ut
+                        </button>
+                    ) : (
+                        <button onClick={handleGoogleLogin} className="text-[10px] text-orange-400 hover:underline flex items-center gap-1 font-bold">
+                            <LogIn size={10}/> Logga in
+                        </button>
+                    )}
+                </div>
+
                 <div className="p-3 border-b border-slate-800 flex-none bg-slate-900/95 backdrop-blur">
                   <button 
                     onClick={handleNewBatch}
@@ -664,7 +713,8 @@ export default function App() {
             title="Spara projekt till listan (Molnet)"
           >
             <Save size={16} className="group-hover:scale-110 transition-transform" />
-            <span className="text-xs font-medium">Spara</span>
+            <span className="text-xs font-medium hidden sm:inline">Spara</span>
+            <span className="text-xs font-medium sm:hidden">Spara</span> {/* Always show text or icon? Keeping text for clarity */}
           </button>
         </div>
       </header>
@@ -1041,6 +1091,61 @@ export default function App() {
                 </div>
               </div>
 
+            </div>
+          </section>
+
+          {/* Kolumn 3: Sparade Batcher (Lista) */}
+          <section className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 flex flex-col shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2 mb-4 border-b border-orange-500/20 pb-3">
+              <div className="p-1.5 bg-orange-500/10 rounded-md text-orange-400">
+                <Archive size={16} />
+              </div>
+              <h2 className="text-sm font-semibold text-orange-300 uppercase tracking-wider">Sparade Batcher</h2>
+            </div>
+
+            <div className="space-y-2">
+              {/* Add New Batch Button */}
+              <button 
+                onClick={handleNewBatch}
+                className="w-full py-2.5 border-2 border-dashed border-slate-600 rounded-lg text-slate-400 hover:text-orange-300 hover:border-orange-400/50 hover:bg-slate-700/30 transition-all flex items-center justify-center gap-2 mb-3 group"
+              >
+                <Plus size={16} className="group-hover:scale-110 transition-transform"/>
+                <span className="text-sm">Ny Batch</span>
+              </button>
+
+              {/* Saved Items List */}
+              {savedBatches.length === 0 ? (
+                <div className="text-center py-8 px-4 text-slate-500 text-xs border border-slate-800 rounded-lg bg-slate-900/30">
+                  <p>Inga sparade batcher än.</p>
+                  <p className="mt-1.5 opacity-60">Fyll i dina värden till vänster och klicka på "Spara".</p>
+                </div>
+              ) : (
+                savedBatches.map((batch) => (
+                  <div 
+                    key={batch.id} 
+                    onClick={() => handleLoadBatch(batch)}
+                    className={`bg-slate-900/80 p-3 rounded-lg border border-slate-700/50 hover:border-orange-500/30 hover:bg-slate-800 transition-all group cursor-pointer relative ${currentBatchId === batch.id ? 'border-orange-500/50 ring-1 ring-orange-500/20' : ''}`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="pr-6 min-w-0">
+                        <h4 className="text-orange-200 font-medium text-sm truncate">{batch.name}</h4>
+                      </div>
+                      <button 
+                        onClick={(e) => initiateDeleteBatch(e, batch.id)}
+                        className="text-slate-600 hover:text-red-400 transition-colors p-1 hover:bg-slate-900 rounded"
+                        title="Ta bort"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    {/* Liten preview av data */}
+                    <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between text-[10px] text-slate-400 font-mono">
+                      <span>OG: {batch.og}</span>
+                      <span>Start: {batch.startDate} ({getDaysSince(batch.startDate)} dagar)</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </section>
 
