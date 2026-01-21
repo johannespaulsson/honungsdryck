@@ -69,7 +69,7 @@
             );
         };
 
-        // --- FIREBASE KONFIGURATION ---
+        // --- FIREBASE SETUP ---
         const firebaseConfig = {
             apiKey: "AIzaSyDGmN-60JoFMFyKNtEVR4sRf258GTv2jU4",
             authDomain: "mjodbryggning.firebaseapp.com",
@@ -86,7 +86,7 @@
         const appId = "mjodbryggning-live"; 
 
         function App() {
-            // STATE
+            // --- STATES ---
             const [user, setUser] = useState(null);
             const [isOffline, setIsOffline] = useState(false);
             const [isSaving, setIsSaving] = useState(false);
@@ -100,7 +100,6 @@
             const [reminderType, setReminderType] = useState('measure');
             const [nameError, setNameError] = useState(false);
             
-            // DATA STATE
             const [batchName, setBatchName] = useState('');
             const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
             const [ingredients, setIngredients] = useState('');
@@ -177,19 +176,35 @@
                 return dataPoints.sort((a, b) => a.date - b.date);
             };
 
+            const getReminderOptions = () => {
+                if (reminderType === 'feed') return [
+                    { label: '24h (Dag 1)', days: 1 },
+                    { label: '48h (Dag 2)', days: 2 },
+                    { label: '72h (Dag 3)', days: 3 },
+                    { label: '1 vecka (Dag 7)', days: 7 }
+                ];
+                if (reminderType === 'rack') return [
+                    { label: '2 veckor', days: 14 },
+                    { label: '4 veckor', days: 28 },
+                    { label: '2 månader', days: 60 }
+                ];
+                if (reminderType === 'sweeten') return [
+                    { label: '3 dagar (Kolla stabilitet)', days: 3 },
+                    { label: '1 vecka (Söta upp)', days: 7 },
+                    { label: '2 veckor (Smaka av)', days: 14 }
+                ];
+                return [{ label: '3 dagar', days: 3 }, { label: '1 vecka', days: 7 }, { label: '2 veckor', days: 14 }];
+            };
+
             // --- EFFECTS ---
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged((u) => {
-                    if (u) {
-                        setUser(u);
-                        setIsOffline(false);
-                    } else {
+                    if (u) { setUser(u); setIsOffline(false); }
+                    else {
                         auth.signInAnonymously().catch(() => {
                             setIsOffline(true);
                             const localData = localStorage.getItem('mjod_batches');
-                            if (localData) {
-                                try { setSavedBatches(JSON.parse(localData).sort((a, b) => b.id - a.id)); } catch(e) {}
-                            }
+                            if (localData) setSavedBatches(JSON.parse(localData).sort((a, b) => b.id - a.id));
                         });
                     }
                 });
@@ -200,10 +215,7 @@
                 if (!user || isOffline) return;
                 const unsubscribe = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches')
                     .onSnapshot((snapshot) => {
-                        const batches = snapshot.docs.map(doc => ({
-                            id: doc.id,
-                            ...doc.data()
-                        }));
+                        const batches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setSavedBatches(batches.sort((a, b) => (b.id > a.id ? 1 : -1)));
                     }, () => setIsOffline(true));
                 return () => unsubscribe();
@@ -225,30 +237,22 @@
                 try { await auth.signInWithPopup(provider); } catch (e) { alert("Inloggning misslyckades: " + e.code); }
             };
 
-            const handleLogout = async () => {
-                await auth.signOut();
-                auth.signInAnonymously().catch(() => setIsOffline(true));
-            };
+            const handleLogout = async () => { await auth.signOut(); auth.signInAnonymously().catch(() => setIsOffline(true)); };
 
             const handleAddLogEntry = () => {
                 const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
-                const newEntry = `- ${today}: ${fg} °Oe, ${calculateCurrentABV()}% ABV (${calculateAttenuation()}% utjäst)\n`;
-                setLog(prev => prev + newEntry);
+                setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: ${fg} °Oe, ${calculateCurrentABV()}% ABV (${calculateAttenuation()}% utjäst)\n`);
             };
 
             const handleAddDateOnly = () => {
                 const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
-                setLog(prev => {
-                    const prefix = (prev.length > 0 && !prev.endsWith('\n')) ? '\n' : '';
-                    return prev + prefix + `- ${today}: `;
-                });
+                setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: `);
             };
 
             const handleSaveBatch = async () => {
                 if (!batchName.trim()) return setNameError(true);
                 if (isSaving) return;
                 setIsSaving(true);
-                setNameError(false);
                 const data = { name: batchName, startDate, lastModified: new Date().toLocaleDateString('sv-SE'), ingredients, log, og, ogTemp, fg, fgTemp };
                 try {
                     let finalId = currentBatchId || Date.now().toString();
@@ -256,9 +260,8 @@
                     if (isOffline || !user) {
                         const existing = savedBatches.find(b => b.id === finalId);
                         let newBatches = existing ? savedBatches.map(b => b.id === finalId ? { ...data, id: finalId } : b) : [...savedBatches, { ...data, id: finalId }];
-                        const sorted = newBatches.sort((a, b) => (b.id > a.id ? 1 : -1));
-                        setSavedBatches(sorted);
-                        localStorage.setItem('mjod_batches', JSON.stringify(sorted));
+                        setSavedBatches(newBatches.sort((a, b) => (b.id > a.id ? 1 : -1)));
+                        localStorage.setItem('mjod_batches', JSON.stringify(newBatches));
                     } else {
                         await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(finalId).set(data, { merge: true });
                     }
@@ -271,33 +274,14 @@
                 setFg(b.fg || 0); setFgTemp(b.fgTemp || 20); setNameError(false); setShowBatchMenu(false);
             };
 
-            const handleNewBatchClick = () => setShowNewBatchConfirm(true);
-
-            const proceedToNewBatch = () => {
-                setCurrentBatchId(null); setBatchName(''); setStartDate(new Date().toISOString().split('T')[0]);
-                setIngredients(''); setLog(''); setOg(0); setOgTemp(20); setFg(0); setFgTemp(20);
-                setNameError(false); setShowNewBatchConfirm(false); setShowBatchMenu(false);
-            };
-
-            const confirmDeleteBatch = async () => {
-                if (batchToDelete) {
-                    if (isOffline) {
-                        const newBatches = savedBatches.filter(b => b.id !== batchToDelete);
-                        setSavedBatches(newBatches); localStorage.setItem('mjod_batches', JSON.stringify(newBatches));
-                    } else if (user) {
-                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(batchToDelete).delete();
-                    }
-                    if (currentBatchId === batchToDelete) proceedToNewBatch();
-                    setShowDeleteModal(false); setBatchToDelete(null);
-                }
-            };
-
             const handleExportData = () => {
                 if(savedBatches.length === 0) return alert("Inget att exportera");
                 const blob = new Blob([JSON.stringify(savedBatches, null, 2)], {type: "application/json"});
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href = url; a.download = `mjod-backup.json`;
-                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                const a = document.createElement('a');
+                a.href = url; a.download = `mjod-backup.json`;
+                document.body.appendChild(a); a.click();
+                URL.revokeObjectURL(url);
             };
 
             const handleFileChange = (e) => {
@@ -314,14 +298,12 @@
                                 if(!currentIds.has(b.id)) {
                                     const newId = b.id || (Date.now() + Math.floor(Math.random()*1000)).toString();
                                     const {id, ...rest} = b;
-                                    if (isOffline) { savedBatches.push({...rest, id: newId}); }
+                                    if (isOffline) { 
+                                        setSavedBatches(prev => [...prev, {...rest, id: newId}].sort((a,b) => (b.id > a.id ? 1 : -1)));
+                                    }
                                     else { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(newId).set(rest); }
                                     count++;
                                 }
-                            }
-                            if (isOffline) {
-                                const sorted = savedBatches.sort((a,b) => (b.id > a.id ? 1 : -1));
-                                setSavedBatches(sorted); localStorage.setItem('mjod_batches', JSON.stringify(sorted));
                             }
                             alert(`Importerade ${count} st.`);
                         }
@@ -331,62 +313,84 @@
                 e.target.value = '';
             };
 
+            const handleNewBatchClick = () => setShowNewBatchConfirm(true);
+            const proceedToNewBatch = () => {
+                setCurrentBatchId(null); setBatchName(''); setStartDate(new Date().toISOString().split('T')[0]);
+                setIngredients(''); setLog(''); setOg(0); setOgTemp(20); setFg(0); setFgTemp(20);
+                setNameError(false); setShowNewBatchConfirm(false); setShowBatchMenu(false);
+            };
+
             const handleFillTestData = async () => {
-                const start1 = new Date(); start1.setDate(start1.getDate()-45);
-                const start2 = new Date(); start2.setDate(start2.getDate()-20);
+                const s1 = new Date(); s1.setDate(s1.getDate()-60);
+                const s2 = new Date(); s2.setDate(s2.getDate()-25);
 
-                const batch1 = {
-                    name: "Viking Blod (Test)",
-                    startDate: start1.toISOString().split('T')[0],
-                    lastModified: new Date().toLocaleDateString('sv-SE'),
-                    ingredients: "4 kg Honung\n12 l Vatten\n60g Hibiskus\nLalvin D-47",
-                    log: `- ${start1.toISOString().split('T')[0].replace(/-/g,'/')}: 110 °Oe\n- ${new Date(start1.getTime()+86400000*14).toISOString().split('T')[0].replace(/-/g,'/')}: 45 °Oe\n- ${new Date(start1.getTime()+86400000*30).toISOString().split('T')[0].replace(/-/g,'/')}: 5 °Oe\n`,
-                    og: 110, ogTemp: 20, fg: 5, fgTemp: 20
+                const getPoint = (start, days, val) => {
+                    const d = new Date(start); d.setDate(d.getDate() + days);
+                    const att = Math.max(0, Math.min(100, ((110 - val) / 110) * 100)).toFixed(1);
+                    const abv = Math.max(0, (110 - val) / 7.5).toFixed(1);
+                    return `- ${d.toISOString().split('T')[0].replace(/-/g,'/')}: ${val} °Oe, ${abv}% ABV (${att}% utjäst)\n`;
                 };
 
-                const batch2 = {
-                    name: "Sommaräng (Test)",
-                    startDate: start2.toISOString().split('T')[0],
-                    lastModified: new Date().toLocaleDateString('sv-SE'),
-                    ingredients: "3 kg Honung\n10 l Vatten\nFläderblommor\nCitron",
-                    log: `- ${start2.toISOString().split('T')[0].replace(/-/g,'/')}: 95 °Oe\n- ${new Date(start2.getTime()+86400000*10).toISOString().split('T')[0].replace(/-/g,'/')}: 30 °Oe\n`,
-                    og: 95, ogTemp: 20, fg: 12, fgTemp: 20
+                let log1 = "";
+                const pts1 = [
+                    {d:0,v:115}, {d:5,v:108}, {d:12,v:75}, {d:20,v:35}, {d:30,v:12}, {d:45,v:2}, {d:60,v:2}
+                ];
+                pts1.forEach(p => log1 += getPoint(s1, p.d, p.v));
+
+                let log2 = "";
+                const pts2 = [
+                    {d:0,v:95}, {d:7,v:78}, {d:14,v:42}, {d:22,v:18}, {d:25,v:14}
+                ];
+                pts2.forEach(p => log2 += getPoint(s2, p.d, p.v));
+
+                const b1 = { 
+                    name: "Viking Blod (Test)", startDate: s1.toISOString().split('T')[0], ingredients: "4kg Ljung-honung\n12l Vatten\n60g Hibiskus", log: log1, og: 115, fg: 2 
+                };
+                const b2 = { 
+                    name: "Sommaräng (Test)", startDate: s2.toISOString().split('T')[0], ingredients: "3kg Honung\nFläderblommor\nCitronzest", log: log2, og: 95, fg: 14 
                 };
 
-                const examples = [batch1, batch2];
-                for (let i = 0; i < examples.length; i++) {
+                const ex = [b1, b2];
+                for (let i = 0; i < ex.length; i++) {
                     const id = (Date.now() + i).toString();
                     if (isOffline || !user) {
                         setSavedBatches(prev => {
-                            const newList = [...prev, { ...examples[i], id }].sort((a,b) => (b.id > a.id ? 1 : -1));
-                            localStorage.setItem('mjod_batches', JSON.stringify(newList));
-                            return newList;
+                            const nl = [...prev, { ...ex[i], id }].sort((a,b) => (b.id > a.id ? 1 : -1));
+                            localStorage.setItem('mjod_batches', JSON.stringify(nl));
+                            return nl;
                         });
-                    } else {
-                        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(id).set(examples[i]);
-                    }
+                    } else { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(id).set(ex[i]); }
                 }
                 alert("Två testbatcher har lagts till!");
-                handleLoadBatch({...batch1, id: Date.now().toString()});
+                handleLoadBatch({...b1, id: Date.now().toString()});
             };
 
             const handleCreateReminder = (days) => {
                 const d = new Date(); d.setDate(d.getDate() + days); d.setHours(18,0,0,0);
                 const iso = d.toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
-                const content = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:${iso}\nSUMMARY:Mjödbryggning: ${batchName || 'Batch'}\nDESCRIPTION:Dags att titta till mjödet.\nEND:VEVENT\nEND:VCALENDAR`;
-                const url = URL.createObjectURL(new Blob([content], {type: 'text/calendar'}));
-                const a = document.createElement('a'); a.href = url; a.download = `mjod-event.ics`;
-                document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                setShowReminderMenu(false);
+                const content = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:${iso}\nSUMMARY:Mjöd: ${batchName}\nEND:VEVENT\nEND:VCALENDAR`;
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], {type: 'text/calendar'}));
+                a.download = `mjod-event.ics`; a.click(); setShowReminderMenu(false);
             };
 
-            // Beräkningar
+            const confirmDeleteBatch = async () => {
+                if (batchToDelete) {
+                    if (isOffline) {
+                        const nl = savedBatches.filter(b => b.id !== batchToDelete);
+                        setSavedBatches(nl); localStorage.setItem('mjod_batches', JSON.stringify(nl));
+                    } else { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(batchToDelete).delete(); }
+                    if (currentBatchId === batchToDelete) proceedToNewBatch();
+                    setShowDeleteModal(false); setBatchToDelete(null);
+                }
+            };
+
             const potentialABV = calculatePotentialABV();
             const currentABV = calculateCurrentABV();
             const attenuation = calculateAttenuation();
             const sweetness = getSweetnessStatus();
             const graphData = getGraphData();
             const oechsleOptions = Array.from({ length: 136 }, (_, i) => i - 15);
+            const remOpts = getReminderOptions();
 
             return (
                 <div className="flex flex-col min-h-screen bg-slate-900 text-orange-100 selection:bg-orange-500/30">
@@ -394,19 +398,44 @@
                     {/* MODALER */}
                     {showInfo && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowInfo(false)}>
-                            <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto custom-scrollbar p-6" onClick={e => e.stopPropagation()}>
+                            <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
-                                    <h2 className="text-xl font-bold text-orange-400 flex gap-2"><Icon name="Info"/> Guide</h2>
+                                    <h2 className="text-xl font-bold text-orange-400 flex gap-2"><Icon name="Info"/> Mjödbryggnings-guide</h2>
                                     <button onClick={() => setShowInfo(false)} className="text-slate-400 hover:text-white transition-colors"><Icon name="X"/></button>
                                 </div>
                                 <div className="space-y-6 text-sm text-slate-300 leading-relaxed">
                                     <section>
-                                        <h3 className="font-bold text-orange-200 border-b border-slate-700 pb-1 mb-2 uppercase tracking-wider text-xs">Instruktioner</h3>
+                                        <h3 className="font-bold text-orange-200 border-b border-slate-700 pb-1 mb-2 uppercase tracking-wider text-xs">Hur man använder appen</h3>
                                         <ul className="list-disc pl-5 space-y-2">
-                                            <li>Spara batcher i molnet genom inloggning (Google).</li>
-                                            <li>Jäskurvan ritas automatiskt om loggen innehåller datum och värde (t.ex. 2024/01/01: 10 °Oe).</li>
-                                            <li>Öchsle korrigeras automatiskt mot 20°C.</li>
+                                            <li><span className="text-orange-100 font-medium">Spara & Synka:</span> Dina batcher sparas automatiskt i molnet om du är inloggad. Klicka på "Spara" för att skicka upp senaste ändringarna.</li>
+                                            <li><span className="text-orange-100 font-medium">Logg & Graf:</span> Skriv ner dina mätningar i loggen med formatet <code className="bg-slate-950 px-1 rounded text-orange-400">ÅÅÅÅ/MM/DD: 10 °Oe</code> så ritas grafen automatiskt.</li>
+                                            <li><span className="text-orange-100 font-medium">Påminnelser:</span> Klicka på klock-ikonen vid loggen för att ladda ner en kalenderfil för viktiga händelser (Näring, Rackning, Eftersötning).</li>
                                         </ul>
+                                    </section>
+
+                                    <section>
+                                        <h3 className="font-bold text-orange-200 border-b border-slate-700 pb-1 mb-2 uppercase tracking-wider text-xs">Att mäta Öchsle (°Oe)</h3>
+                                        <p className="mb-2">Öchslevikten talar om hur mycket socker som finns i vätskan. </p>
+                                        <ul className="list-disc pl-5 space-y-2">
+                                            <li><span className="text-orange-100 font-medium">OG (Original Gravity):</span> Värdet innan jäsning. Avgör hur starkt mjödet kan bli.</li>
+                                            <li><span className="text-orange-100 font-medium">FG (Final Gravity):</span> Värdet när det slutat jäsa. Avgör hur sött det färdiga mjödet är.</li>
+                                            <li><span className="text-orange-100 font-medium">Temperatur:</span> Mätaren är kalibrerad för 20°C. Om vätskan är varmare eller kallare korrigerar appen detta automatiskt (0.2 °Oe per grad).</li>
+                                        </ul>
+                                    </section>
+
+                                    <section>
+                                        <h3 className="font-bold text-orange-200 border-b border-slate-700 pb-1 mb-2 uppercase tracking-wider text-xs">Sötma-skala (FG)</h3>
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="bg-slate-900 p-2 rounded border border-slate-700"><strong>Torrt:</strong> Under 4 °Oe</div>
+                                            <div className="bg-slate-900 p-2 rounded border border-slate-700"><strong>Halvtorrt:</strong> 4 - 12 °Oe</div>
+                                            <div className="bg-slate-900 p-2 rounded border border-slate-700"><strong>Halvsött:</strong> 12 - 25 °Oe</div>
+                                            <div className="bg-slate-900 p-2 rounded border border-slate-700"><strong>Sött:</strong> Över 25 °Oe</div>
+                                        </div>
+                                    </section>
+
+                                    <section className="bg-orange-500/10 p-3 rounded-lg border border-orange-500/20">
+                                        <h3 className="font-bold text-orange-400 mb-1">Tips för bättre mjöd</h3>
+                                        <p className="italic text-xs">Se till att syresätta musten ordentligt innan du tillsätter jästen, men undvik syre helt efter att de första dagarna av jäsning har passerat för att undvika oxidering. Använd jästnäring i intervaller för att undvika svaveldoft (H2S).</p>
                                     </section>
                                 </div>
                             </div>
@@ -416,10 +445,10 @@
                     {showDeleteModal && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}>
                             <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-                                <h3 className="text-lg font-bold text-orange-400 mb-2 flex gap-2"><Icon name="Trash2"/> Ta bort?</h3>
+                                <h3 className="text-lg font-bold text-orange-400 mb-2 flex gap-2"><Icon name="Trash2"/> Ta bort batch?</h3>
                                 <div className="flex justify-end gap-2 mt-4">
-                                    <button onClick={() => setShowDeleteModal(false)} className="px-3 py-1.5 rounded hover:bg-slate-700">Avbryt</button>
-                                    <button onClick={confirmDeleteBatch} className="px-3 py-1.5 rounded bg-red-900 text-white">Ta bort</button>
+                                    <button onClick={() => setShowDeleteModal(false)} className="px-3 py-1.5 rounded hover:bg-slate-700 transition-colors">Avbryt</button>
+                                    <button onClick={confirmDeleteBatch} className="px-3 py-1.5 rounded bg-red-900 text-white hover:bg-red-800 transition-colors">Ta bort</button>
                                 </div>
                             </div>
                         </div>
@@ -429,71 +458,65 @@
                         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowNewBatchConfirm(false)}>
                             <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
                                 <h3 className="text-lg font-bold text-orange-400 mb-2 flex gap-2"><Icon name="AlertTriangle"/> Skapa ny batch?</h3>
+                                <p className="text-slate-300 text-sm mb-4">Kom ihåg att spara dina ändringar först!</p>
                                 <div className="flex flex-col gap-2">
-                                    <button onClick={() => { handleSaveBatch(); setShowNewBatchConfirm(false); }} className="w-full bg-orange-500 text-slate-950 font-bold py-2 rounded">Spara nuvarande först</button>
-                                    <button onClick={proceedToNewBatch} className="w-full py-2 rounded hover:bg-slate-700 text-slate-400 text-xs">Fortsätt utan att spara</button>
-                                    <button onClick={() => setShowNewBatchConfirm(false)} className="w-full py-2 rounded bg-slate-700 text-white text-xs">Avbryt</button>
+                                    <button onClick={() => { handleSaveBatch(); setShowNewBatchConfirm(false); }} className="w-full bg-orange-500 text-slate-950 font-bold py-2 rounded hover:bg-orange-400 transition-colors">Spara nuvarande först</button>
+                                    <button onClick={proceedToNewBatch} className="w-full py-2 rounded hover:bg-slate-700 text-slate-400 text-xs transition-colors">Fortsätt utan att spara</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {/* HEADER */}
-                    <header className="flex-none border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur z-40">
+                    <header className="flex-none border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur z-40 shadow-md">
                         <div className="max-w-2xl mx-auto w-full p-4 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <h1 className="text-xl font-bold tracking-tight text-orange-400">Mjöd</h1>
-                                <span onClick={handleFillTestData} className="text-[10px] font-mono border border-orange-500/20 px-1.5 py-0.5 rounded cursor-pointer hover:text-orange-200" title="Skapa två test-batcher">v1.1.9</span>
+                                <span onClick={handleFillTestData} className="text-[10px] font-mono border border-orange-500/20 px-1.5 py-0.5 rounded cursor-pointer hover:text-orange-200" title="Skapa två test-batcher">v1.2.3</span>
                                 <button onClick={() => setShowInfo(true)} className="text-slate-500 hover:text-orange-400"><Icon name="Info" size={18}/></button>
                             </div>
-                            
                             <div className="flex items-center gap-2">
                                 <div className="relative" ref={batchMenuRef}>
                                     <button onClick={() => setShowBatchMenu(!showBatchMenu)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent transition-all ${showBatchMenu ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'text-slate-400 hover:bg-slate-800'}`}>
                                         <Icon name="FolderOpen" size={16}/> <span className="text-xs font-medium hidden sm:inline">Mina Batcher</span> <Icon name="ChevronDown" size={14}/>
                                     </button>
                                     {showBatchMenu && (
-                                        <div className="fixed left-1/2 -translate-x-1/2 top-16 sm:absolute sm:left-auto sm:right-0 sm:translate-x-0 sm:top-full mt-2 w-[calc(100vw-2rem)] max-w-sm sm:w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden origin-top animate-in fade-in zoom-in-95 duration-200">
+                                        <div className="fixed left-1/2 -translate-x-1/2 top-16 sm:absolute sm:left-auto sm:right-0 sm:translate-x-0 sm:top-full mt-2 w-[calc(100vw-2rem)] max-w-sm sm:w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-right">
                                             <div className="p-3 bg-slate-950/50 border-b border-slate-800 flex justify-between items-center text-xs text-slate-400">
-                                                <span className="flex gap-2 items-center"><Icon name="User" size={14}/> {isOffline ? 'Offline' : (user && !user.isAnonymous ? 'Inloggad' : 'Gäst')}</span>
+                                                <span><Icon name="User" size={14} className="inline mr-2"/> {isOffline ? 'Offline' : (user && !user.isAnonymous ? 'Inloggad' : 'Gäst')}</span>
                                                 {!isOffline && (user && !user.isAnonymous ? <button onClick={handleLogout} className="text-orange-400">Ut</button> : <button onClick={handleGoogleLogin} className="text-orange-400 font-bold underline">Logga in</button>)}
                                             </div>
                                             <div className="p-2 border-b border-slate-800">
-                                                <button onClick={handleNewBatchClick} className="w-full py-2 border-2 border-dashed border-slate-700 rounded text-slate-400 hover:text-orange-300 text-xs font-bold uppercase flex justify-center gap-2"><Icon name="Plus" size={14}/> Ny Batch</button>
+                                                <button onClick={handleNewBatchClick} className="w-full py-2 border-2 border-dashed border-slate-700 rounded text-slate-400 hover:text-orange-300 text-xs font-bold uppercase flex justify-center gap-2 transition-colors"><Icon name="Plus" size={14}/> Ny Batch</button>
                                             </div>
                                             <div className="max-h-80 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                                                {savedBatches.length === 0 ? <p className="text-center text-xs text-slate-600 py-4 italic">Inga sparade brygder</p> : 
+                                                {savedBatches.length === 0 ? <p className="text-center text-xs py-4 text-slate-600 italic">Inga sparade brygder</p> : 
                                                 savedBatches.map(b => (
-                                                    <div key={b.id} onClick={() => handleLoadBatch(b)} className={`p-2 rounded border cursor-pointer relative ${currentBatchId === b.id ? 'bg-orange-500/10 border-orange-500/40' : 'bg-slate-800/50 border-slate-800 hover:bg-slate-800'}`}>
+                                                    <div key={b.id} onClick={() => handleLoadBatch(b)} className={`p-2 rounded border cursor-pointer relative transition-all ${currentBatchId === b.id ? 'bg-orange-500/10 border-orange-500/40' : 'bg-slate-800/50 border-slate-800 hover:bg-slate-800'}`}>
                                                         <div className="flex justify-between items-start mb-1">
                                                             <span className={`text-sm font-medium truncate pr-6 ${currentBatchId === b.id ? 'text-orange-300' : 'text-slate-300'}`}>{b.name}</span>
                                                             <button onClick={(e) => {e.stopPropagation(); setBatchToDelete(b.id); setShowDeleteModal(true);}} className="text-slate-600 hover:text-red-400 absolute top-2 right-2"><Icon name="Trash2" size={14}/></button>
                                                         </div>
-                                                        <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-                                                            <span>OG: {b.og}</span>
-                                                            <span>{b.startDate} ({getDaysSince(b.startDate)}d)</span>
-                                                        </div>
+                                                        <div className="flex justify-between text-[10px] text-slate-500 font-mono"><span>OG: {b.og}</span><span>{b.startDate} ({getDaysSince(b.startDate)}d)</span></div>
                                                     </div>
                                                 ))}
                                             </div>
                                             <div className="p-2 border-t border-slate-800 bg-slate-950/50 flex justify-between">
-                                                <button onClick={() => fileInputRef.current.click()} className="text-[10px] text-slate-500 hover:text-orange-300 flex gap-1 items-center"><Icon name="Upload" size={12}/> Importera</button>
-                                                <button onClick={handleExportData} className="text-[10px] text-slate-500 hover:text-orange-300 flex gap-1 items-center"><Icon name="Download" size={12}/> Exportera</button>
+                                                <button onClick={() => fileInputRef.current.click()} className="text-[10px] text-slate-500 hover:text-orange-300 flex items-center gap-1"><Icon name="Upload" size={12}/> Importera</button>
+                                                <button onClick={handleExportData} className="text-[10px] text-slate-500 hover:text-orange-300 flex items-center gap-1"><Icon name="Download" size={12}/> Exportera</button>
                                                 <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
                                             </div>
                                         </div>
                                     )}
                                 </div>
                                 <div className="h-5 w-px bg-slate-800 mx-1"></div>
-                                <button onClick={handleSaveBatch} disabled={isSaving} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-orange-500/20 active:scale-95 transition-all ${isSaving ? 'opacity-50 bg-orange-500/10 text-orange-400' : 'text-orange-400 hover:bg-orange-500/10'}`}>
-                                    <Icon name="Save" size={16} className={isSaving ? "saving-pulse" : ""}/> 
-                                    <span className="text-xs font-medium hidden sm:inline">{isSaving ? 'Sparar...' : 'Spara'}</span>
+                                <button onClick={handleSaveBatch} disabled={isSaving} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-orange-500/20 active:scale-95 transition-all ${isSaving ? 'opacity-50 bg-orange-500/10 text-orange-400 cursor-not-allowed' : 'text-orange-400 hover:bg-orange-500/10'}`}>
+                                    <Icon name="Save" size={16} className={isSaving ? "saving-pulse" : ""}/> <span className="text-xs font-medium hidden sm:inline">{isSaving ? 'Sparar...' : 'Spara'}</span>
                                 </button>
                             </div>
                         </div>
                     </header>
 
-                    {/* MAIN CONTENT */}
                     <main className="flex-1 p-4 overflow-y-auto custom-scrollbar">
                         <div className="max-w-2xl mx-auto space-y-4 pb-10">
                             <section className="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-xl relative overflow-hidden">
@@ -507,197 +530,122 @@
                                         <input type="text" value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="Namn..." className={`w-full bg-slate-950/50 border rounded-md px-3 py-2 text-sm text-orange-100 focus:outline-none focus:ring-1 ${nameError ? 'border-red-500/50 focus:border-red-500' : 'border-slate-700 focus:border-orange-500/50'}`}/>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 transition-colors hover:border-slate-600">
                                             <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Startdatum</label>
                                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none" style={{colorScheme:'dark'}}/>
                                         </div>
                                         <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                            <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Status</label>
+                                            <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Sötma/Status</label>
                                             <div className="text-xs font-medium text-orange-300 italic">{sweetness}</div>
                                         </div>
                                     </div>
-                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 transition-colors hover:border-slate-600">
                                         <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Ingredienser</label>
-                                        <textarea rows="8" value={ingredients} onChange={e => setIngredients(e.target.value)} placeholder="Honung, vatten..." className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none resize-none custom-scrollbar"/>
+                                        <textarea rows="8" value={ingredients} onChange={e => setIngredients(e.target.value)} placeholder="Honung, vatten..." className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none resize-none custom-scrollbar font-medium"/>
                                     </div>
 
-                                    {/* OG */}
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <div className="h-px flex-1 bg-slate-700/50"></div>
-                                        <span className="text-[10px] font-bold text-orange-400/50 uppercase tracking-wider">Original Gravity</span>
-                                        <div className="h-px flex-1 bg-slate-700/50"></div>
-                                    </div>
+                                    <div className="flex items-center gap-2 mb-1"><div className="h-px flex-1 bg-slate-700/50"></div><span className="text-[10px] font-bold text-orange-400/50 uppercase tracking-wider">Original Gravity</span><div className="h-px flex-1 bg-slate-700/50"></div></div>
                                     <div className="grid grid-cols-3 gap-3">
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                            <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">OG (°Oe)</label>
-                                            <div className="relative">
-                                                <select value={og} onChange={e => setOg(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none cursor-pointer">
-                                                    {oechsleOptions.map(v => <option key={v} value={v} className="bg-slate-900">{v}</option>)}
-                                                </select>
-                                                <div className="absolute inset-y-0 right-0 flex items-center pointer-events-none text-orange-400/50"><Icon name="ChevronDown" size={14}/></div>
-                                            </div>
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50"><label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">OG (°Oe)</label>
+                                            <select value={og} onChange={e => setOg(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none cursor-pointer">
+                                                {oechsleOptions.map(v => <option key={v} value={v} className="bg-slate-900">{v}</option>)}
+                                            </select>
                                         </div>
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                            <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Temp</label>
-                                            <input type="number" value={ogTemp} onChange={e => setOgTemp(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none"/>
-                                        </div>
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                            <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Potentiell ABV</label>
-                                            <div className="text-lg font-bold text-orange-400">{potentialABV}%</div>
-                                        </div>
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50"><label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Temp</label><input type="number" value={ogTemp} onChange={e => setOgTemp(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none"/></div>
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 relative"><label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Potentiell ABV</label><div className="text-lg font-bold text-orange-400">{potentialABV}%</div></div>
                                     </div>
 
-                                    {/* FG */}
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <div className="h-px flex-1 bg-slate-700/50"></div>
-                                        <span className="text-[10px] font-bold text-orange-400/50 uppercase tracking-wider">Aktuell / Final Gravity</span>
-                                        <div className="h-px flex-1 bg-slate-700/50"></div>
-                                    </div>
+                                    <div className="flex items-center gap-2 mb-1"><div className="h-px flex-1 bg-slate-700/50"></div><span className="text-[10px] font-bold text-orange-400/50 uppercase tracking-wider">Aktuell / Final Gravity</span><div className="h-px flex-1 bg-slate-700/50"></div></div>
                                     <div className="grid grid-cols-3 gap-3">
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                            <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">FG (°Oe)</label>
-                                            <div className="relative">
-                                                <select value={fg} onChange={e => setFg(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none cursor-pointer">
-                                                    {oechsleOptions.map(v => <option key={v} value={v} className="bg-slate-900">{v}</option>)}
-                                                </select>
-                                                <div className="absolute inset-y-0 right-0 flex items-center pointer-events-none text-orange-400/50"><Icon name="ChevronDown" size={14}/></div>
-                                            </div>
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50"><label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">FG (°Oe)</label>
+                                            <select value={fg} onChange={e => setFg(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none cursor-pointer">
+                                                {oechsleOptions.map(v => <option key={v} value={v} className="bg-slate-900">{v}</option>)}
+                                            </select>
                                         </div>
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                            <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Temp</label>
-                                            <input type="number" value={fgTemp} onChange={e => setFgTemp(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none"/>
-                                        </div>
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 relative overflow-hidden">
-                                            <button onClick={handleAddLogEntry} className="absolute top-1 right-1 text-orange-500/50 hover:text-orange-400" title="Spara till logg"><Icon name="Save" size={14}/></button>
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50"><label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Temp</label><input type="number" value={fgTemp} onChange={e => setFgTemp(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none"/></div>
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 relative overflow-hidden group">
+                                            <button onClick={handleAddLogEntry} className="absolute top-1 right-1 text-orange-500/50 hover:text-orange-400 transition-colors" title="Spara mätvärde till logg"><Icon name="Save" size={14}/></button>
                                             <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Aktuell ABV</label>
                                             <div className="text-lg font-bold text-orange-400">{currentABV}%</div>
                                         </div>
                                     </div>
 
-                                    {/* UTJÄSNING BAR */}
                                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
                                         <div className="flex justify-between text-[10px] mb-1.5 uppercase font-bold text-orange-400/70"><span>Utjäsning</span><span>{attenuation}%</span></div>
-                                        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                            <div className="h-full bg-orange-500 transition-all" style={{ width: `${Math.min(attenuation, 100)}%` }}></div>
-                                        </div>
+                                        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden"><div className="h-full bg-orange-500 transition-all duration-700 ease-out" style={{ width: `${Math.min(attenuation, 100)}%` }}></div></div>
                                     </div>
 
-                                    {/* LOGG */}
-                                    <div className="flex items-center gap-2 mb-2">
+                                    <div className="flex items-center gap-2 mb-2 pt-4">
                                         <div className="h-px flex-1 bg-slate-700/50"></div>
                                         <div className="flex items-center gap-3">
-                                            <button onClick={handleAddDateOnly} className="flex items-center gap-1 text-orange-400/50 hover:text-orange-400" title="Ny loggrad">
-                                                <Icon name="Plus" size={14}/>
-                                                <span className="text-[10px] font-bold uppercase tracking-wider">Logg</span>
-                                            </button>
+                                            <button onClick={handleAddDateOnly} className="flex items-center gap-1 text-orange-400/50 hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded"><Icon name="Plus" size={14}/><span className="text-[10px] font-bold uppercase">Logg</span></button>
                                             <div className="relative">
-                                                <button onClick={() => setShowReminderMenu(!showReminderMenu)} className={`hover:text-orange-400 ${showReminderMenu ? 'text-orange-400' : 'text-orange-400/50'}`} title="Påminnelse">
-                                                    <Icon name="Bell" size={14}/>
-                                                </button>
+                                                <button onClick={() => setShowReminderMenu(!showReminderMenu)} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showReminderMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`}><Icon name="Bell" size={14}/></button>
                                                 {showReminderMenu && (
-                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-2 w-48 z-20">
-                                                        <div className="px-1 mb-1 border-b border-slate-700 pb-1">
-                                                            <select value={reminderType} onChange={e => setReminderType(e.target.value)} className="w-full bg-slate-900 text-xs text-slate-300 p-1 focus:outline-none">
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-2 w-48 z-20 animate-in fade-in zoom-in-95 duration-100">
+                                                        <div className="flex justify-between items-center mb-1 border-b border-slate-700 pb-1">
+                                                            <label className="text-[9px] text-slate-400 uppercase pl-1">Typ</label>
+                                                            <button onClick={() => setShowReminderMenu(false)} className="text-slate-500 hover:text-orange-400 transition-colors"><Icon name="X" size={10} /></button>
+                                                        </div>
+                                                        <div className="px-1 mb-1">
+                                                            <select value={reminderType} onChange={e => setReminderType(e.target.value)} className="w-full bg-slate-900 text-xs text-slate-300 p-1 focus:outline-none rounded border border-slate-700">
                                                                 <option value="measure">Mät Gravity</option>
-                                                                <option value="feed">Tillsätt näring</option>
+                                                                <option value="feed">Näring</option>
                                                                 <option value="rack">Tappa om</option>
+                                                                <option value="sweeten">Eftersöta</option>
                                                             </select>
                                                         </div>
-                                                        {[3, 7, 14, 30].map(d => (
-                                                            <button key={d} onClick={() => handleCreateReminder(d)} className="w-full text-left text-[10px] px-2 py-1.5 hover:bg-slate-700 rounded text-slate-300">Om {d} dagar</button>
-                                                        ))}
+                                                        <div className="max-h-40 overflow-y-auto custom-scrollbar">
+                                                            {remOpts.map(opt => <button key={opt.label} onClick={() => handleCreateReminder(opt.days)} className="w-full text-left text-[10px] px-2 py-2 hover:bg-slate-700 rounded text-slate-300 transition-colors">{opt.label}</button>)}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="h-px flex-1 bg-slate-700/50"></div>
                                     </div>
-                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                        <textarea rows="6" value={log} onChange={e => setLog(e.target.value)} placeholder="Skriv logg här..." className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none resize-none custom-scrollbar font-mono mb-2"/>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 transition-colors hover:border-slate-600">
+                                        <textarea rows="6" value={log} onChange={e => setLog(e.target.value)} placeholder="Anteckningar..." className="w-full bg-transparent border-none text-sm text-orange-100 font-mono mb-2 custom-scrollbar focus:outline-none"/>
                                     </div>
 
-                                    {/* JÄSKURVA - ALLTID SYNLIG MED AXELVÄRDEN */}
-                                    <div className="flex items-center gap-2 mb-2 mt-12">
-                                        <div className="h-px flex-1 bg-slate-700/50"></div>
-                                        <span className="text-[10px] font-bold text-orange-400/50 uppercase tracking-wider">Jäskurva</span>
-                                        <div className="h-px flex-1 bg-slate-700/50"></div>
-                                    </div>
-                                    <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700/50">
+                                    {/* JÄSKURVA */}
+                                    <div className="flex items-center gap-2 mb-2 mt-12"><div className="h-px flex-1 bg-slate-700/50"></div><span className="text-[10px] font-bold text-orange-400/50 uppercase tracking-wider">Jäskurva</span><div className="h-px flex-1 bg-slate-700/50"></div></div>
+                                    <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700/50 overflow-visible">
                                         {graphData.length > 1 ? (
                                             <div className="h-48 w-full flex">
                                                 {/* Y-axel labels */}
-                                                <div className="w-8 flex flex-col justify-between items-end pr-2 text-[8px] text-slate-500 font-mono py-1">
+                                                <div className="w-10 flex flex-col justify-between items-end pr-2 text-[11px] text-slate-400 font-mono py-1">
                                                     <span>{Math.max(...graphData.map(d => d.value)) + 5}</span>
                                                     <span>{Math.round((Math.max(...graphData.map(d => d.value)) + Math.min(...graphData.map(d => d.value))) / 2)}</span>
                                                     <span>{Math.min(...graphData.map(d => d.value)) - 5}</span>
                                                 </div>
-                                                
                                                 <div className="flex-1 flex flex-col">
-                                                    {/* Graf-yta */}
-                                                    <div className="flex-1 relative border-l border-b border-slate-800">
+                                                    <div className="flex-1 relative border-l border-b border-slate-700">
                                                         <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                                            {/* Bakgrunds-grid */}
-                                                            {[0, 25, 50, 75, 100].map(y => (
-                                                                <line key={y} x1="0" y1={y} x2="100" y2={y} stroke="rgba(148, 163, 184, 0.05)" strokeWidth="1" vectorEffect="non-scaling-stroke"/>
-                                                            ))}
-                                                            
-                                                            {/* Kurvan */}
+                                                            {[0, 25, 50, 75, 100].map(y => <line key={y} x1="0" y1={y} x2="100" y2={y} stroke="rgba(148,163,184,0.05)" strokeWidth="1" vectorEffect="non-scaling-stroke"/>)}
                                                             <path d={`M ${graphData.map((pt, i) => {
                                                                 const x = (i / (graphData.length - 1)) * 100;
-                                                                const maxVal = Math.max(...graphData.map(d => d.value)) + 5;
-                                                                const minVal = Math.min(...graphData.map(d => d.value)) - 5;
-                                                                const range = maxVal - minVal;
-                                                                const y = 100 - ((pt.value - minVal) / range * 100);
+                                                                const range = Math.max(...graphData.map(d => d.value)) + 5 - (Math.min(...graphData.map(d => d.value)) - 5);
+                                                                const y = 100 - ((pt.value - (Math.min(...graphData.map(d => d.value)) - 5)) / range * 100);
                                                                 return `${x} ${y}`;
                                                             }).join(' L ')}`} fill="none" stroke="rgba(251, 146, 60, 0.6)" strokeWidth="2" strokeDasharray="4 4" vectorEffect="non-scaling-stroke"/>
                                                         </svg>
-                                                        
-                                                        {/* Datapunkter */}
                                                         {graphData.map((pt, i) => {
                                                             const x = (i / (graphData.length - 1)) * 100;
-                                                            const maxVal = Math.max(...graphData.map(d => d.value)) + 5;
-                                                            const minVal = Math.min(...graphData.map(d => d.value)) - 5;
-                                                            const range = maxVal - minVal;
-                                                            const y = 100 - ((pt.value - minVal) / range * 100);
-                                                            return (
-                                                                <div 
-                                                                    key={i} 
-                                                                    className={`absolute w-2 h-2 rounded-full -ml-1 -mt-1 border-2 border-orange-400 group cursor-help ${pt.type==='start'?'bg-slate-900':'bg-orange-400'}`} 
-                                                                    style={{left: `${x}%`, top: `${y}%`}}
-                                                                >
-                                                                    <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 text-orange-200 text-[8px] px-1 py-0.5 rounded border border-slate-700 whitespace-nowrap z-50">
-                                                                        {pt.value} °Oe
-                                                                    </div>
-                                                                </div>
-                                                            );
+                                                            const range = Math.max(...graphData.map(d => d.value)) + 5 - (Math.min(...graphData.map(d => d.value)) - 5);
+                                                            const y = 100 - ((pt.value - (Math.min(...graphData.map(d => d.value)) - 5)) / range * 100);
+                                                            return <div key={i} className={`absolute w-2.5 h-2.5 rounded-full -ml-1.5 -mt-1.5 border-2 border-orange-400 group cursor-help ${pt.type==='start'?'bg-slate-900':'bg-orange-400'}`} style={{left: `${x}%`, top: `${y}%`}}><div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 text-orange-200 text-xs px-2 py-1 rounded border border-slate-700 z-50 whitespace-nowrap shadow-xl">{pt.value} °Oe</div></div>;
                                                         })}
                                                     </div>
-                                                    
-                                                    {/* X-axel labels (Datum) */}
-                                                    <div className="h-6 relative mt-1">
-                                                        {graphData.map((pt, i) => {
-                                                            // Visa bara etikett för första, sista och mitt-datapunkten om det är många
-                                                            if (i === 0 || i === graphData.length - 1 || graphData.length < 5 || i % Math.floor(graphData.length/2) === 0) {
-                                                                return (
-                                                                    <div key={i} className="absolute text-[7px] text-slate-500 font-mono transform -translate-x-1/2" style={{left: `${(i / (graphData.length - 1)) * 100}%`}}>
-                                                                        {pt.displayDate}
-                                                                    </div>
-                                                                );
-                                                            }
-                                                            return null;
-                                                        })}
+                                                    <div className="h-6 relative mt-2">
+                                                        {graphData.map((pt, i) => (i === 0 || i === graphData.length - 1 || graphData.length < 5 || i % Math.floor(graphData.length/2) === 0) && (
+                                                            <div key={i} className="absolute text-[10px] text-slate-500 font-mono transform -translate-x-1/2" style={{left: `${(i / (graphData.length - 1)) * 100}%`}}>{pt.displayDate}</div>
+                                                        ))}
                                                     </div>
                                                 </div>
                                             </div>
-                                        ) : (
-                                            <div className="h-32 w-full flex flex-col items-center justify-center text-[10px] text-slate-600 italic border border-dashed border-slate-800 rounded-lg">
-                                                <Icon name="Activity" size={16} className="mb-2 opacity-30"/>
-                                                Ingen jäshistorik tillgänglig.
-                                                <span className="mt-1 opacity-50 text-[8px]">Skriv t.ex. "2024/01/01: 10 °Oe" i loggen för att se kurvan.</span>
-                                            </div>
-                                        )}
+                                        ) : <div className="h-32 w-full flex flex-col items-center justify-center text-[10px] text-slate-600 italic border border-dashed border-slate-800 rounded-lg">Logga mätvärden för att se kurvan.</div>}
                                     </div>
-
                                 </div>
                             </section>
                         </div>
@@ -705,9 +653,7 @@
                 </div>
             );
         }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
