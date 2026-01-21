@@ -45,10 +45,8 @@
                 Plus: <path d="M5 12h14M12 5v14"/>,
                 Save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>,
                 Activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>,
-                Droplets: <><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.8-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></>,
                 Trash2: <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/>,
                 Calendar: <><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>,
-                FileText: <><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></>,
                 Info: <><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></>,
                 X: <><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>,
                 TrendingDown: <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></>,
@@ -58,7 +56,6 @@
                 LogIn: <><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></>,
                 LogOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></>,
                 User: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
-                AlertTriangle: <><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></>,
                 Download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
                 Upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
             };
@@ -176,24 +173,11 @@
                 return dataPoints.sort((a, b) => a.date - b.date);
             };
 
-            const getReminderOptions = () => {
-                if (reminderType === 'feed') return [
-                    { label: '24h (Dag 1)', days: 1 },
-                    { label: '48h (Dag 2)', days: 2 },
-                    { label: '72h (Dag 3)', days: 3 },
-                    { label: '1 vecka (Dag 7)', days: 7 }
-                ];
-                if (reminderType === 'rack') return [
-                    { label: '2 veckor', days: 14 },
-                    { label: '4 veckor', days: 28 },
-                    { label: '2 månader', days: 60 }
-                ];
-                if (reminderType === 'sweeten') return [
-                    { label: '3 dagar (Kolla stabilitet)', days: 3 },
-                    { label: '1 vecka (Söta upp)', days: 7 },
-                    { label: '2 veckor (Smaka av)', days: 14 }
-                ];
-                return [{ label: '3 dagar', days: 3 }, { label: '1 vecka', days: 7 }, { label: '2 veckor', days: 14 }];
+            const reminderOptions = {
+                measure: { label: 'Mät Gravity', options: [{ label: '3 dagar', days: 3 }, { label: '1 vecka', days: 7 }, { label: '2 veckor', days: 14 }] },
+                rack: { label: 'Tappa om', options: [{ label: '2 veckor', days: 14 }, { label: '4 veckor', days: 28 }, { label: '2 månader', days: 60 }] },
+                feed: { label: 'Näring', options: [{ label: '24h (Dag 1)', days: 1 }, { label: '48h (Dag 2)', days: 2 }, { label: '72h (Dag 3)', days: 3 }, { label: '1 vecka', days: 7 }] },
+                sweeten: { label: 'Eftersöta', options: [{ label: '3 dagar', days: 3 }, { label: '1 vecka', days: 7 }, { label: '2 veckor', days: 14 }] }
             };
 
             // --- EFFECTS ---
@@ -280,7 +264,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url; a.download = `mjod-backup.json`;
-                document.body.appendChild(a); a.click();
+                a.click();
                 URL.revokeObjectURL(url);
             };
 
@@ -293,19 +277,15 @@
                         const data = JSON.parse(ev.target.result);
                         if(Array.isArray(data)) {
                             const currentIds = new Set(savedBatches.map(b => b.id));
-                            let count = 0;
                             for(const b of data) {
                                 if(!currentIds.has(b.id)) {
                                     const newId = b.id || (Date.now() + Math.floor(Math.random()*1000)).toString();
                                     const {id, ...rest} = b;
-                                    if (isOffline) { 
-                                        setSavedBatches(prev => [...prev, {...rest, id: newId}].sort((a,b) => (b.id > a.id ? 1 : -1)));
-                                    }
+                                    if (isOffline) { setSavedBatches(prev => [...prev, {...rest, id: newId}].sort((a,b) => (b.id > a.id ? 1 : -1))); }
                                     else { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(newId).set(rest); }
-                                    count++;
                                 }
                             }
-                            alert(`Importerade ${count} st.`);
+                            alert("Import klar!");
                         }
                     } catch(err) { alert("Fel vid import"); }
                 };
@@ -323,62 +303,43 @@
             const handleFillTestData = async () => {
                 const s1 = new Date(); s1.setDate(s1.getDate()-60);
                 const s2 = new Date(); s2.setDate(s2.getDate()-25);
-
-                const getPoint = (start, days, val) => {
+                const getP = (start, days, val) => {
                     const d = new Date(start); d.setDate(d.getDate() + days);
-                    const att = Math.max(0, Math.min(100, ((110 - val) / 110) * 100)).toFixed(1);
-                    const abv = Math.max(0, (110 - val) / 7.5).toFixed(1);
+                    const att = Math.max(0, Math.min(100, ((115 - val) / 115) * 100)).toFixed(1);
+                    const abv = Math.max(0, (115 - val) / 7.5).toFixed(1);
                     return `- ${d.toISOString().split('T')[0].replace(/-/g,'/')}: ${val} °Oe, ${abv}% ABV (${att}% utjäst)\n`;
                 };
-
-                let log1 = "";
-                const pts1 = [
-                    {d:0,v:115}, {d:5,v:108}, {d:12,v:75}, {d:20,v:35}, {d:30,v:12}, {d:45,v:2}, {d:60,v:2}
-                ];
-                pts1.forEach(p => log1 += getPoint(s1, p.d, p.v));
-
-                let log2 = "";
-                const pts2 = [
-                    {d:0,v:95}, {d:7,v:78}, {d:14,v:42}, {d:22,v:18}, {d:25,v:14}
-                ];
-                pts2.forEach(p => log2 += getPoint(s2, p.d, p.v));
-
-                const b1 = { 
-                    name: "Viking Blod (Test)", startDate: s1.toISOString().split('T')[0], ingredients: "4kg Ljung-honung\n12l Vatten\n60g Hibiskus", log: log1, og: 115, fg: 2 
-                };
-                const b2 = { 
-                    name: "Sommaräng (Test)", startDate: s2.toISOString().split('T')[0], ingredients: "3kg Honung\nFläderblommor\nCitronzest", log: log2, og: 95, fg: 14 
-                };
-
+                let log1 = ""; const pts1 = [{d:0,v:115}, {d:5,v:108}, {d:12,v:75}, {d:20,v:35}, {d:30,v:12}, {d:45,v:2}, {d:60,v:2}]; pts1.forEach(p => log1 += getP(s1, p.d, p.v));
+                let log2 = ""; const pts2 = [{d:0,v:95}, {d:7,v:78}, {d:14,v:42}, {d:22,v:18}, {d:25,v:14}]; pts2.forEach(p => log2 += getP(s2, p.d, p.v));
+                const b1 = { name: "Viking Blod (Test)", startDate: s1.toISOString().split('T')[0], ingredients: "4kg Ljung-honung\n12l Vatten\n60g Hibiskus", log: log1, og: 115, fg: 2 };
+                const b2 = { name: "Sommaräng (Test)", startDate: s2.toISOString().split('T')[0], ingredients: "3kg Honung\nCitronzest", log: log2, og: 95, fg: 14 };
                 const ex = [b1, b2];
                 for (let i = 0; i < ex.length; i++) {
                     const id = (Date.now() + i).toString();
-                    if (isOffline || !user) {
-                        setSavedBatches(prev => {
-                            const nl = [...prev, { ...ex[i], id }].sort((a,b) => (b.id > a.id ? 1 : -1));
-                            localStorage.setItem('mjod_batches', JSON.stringify(nl));
-                            return nl;
-                        });
-                    } else { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(id).set(ex[i]); }
+                    if (isOffline || !user) { setSavedBatches(prev => { const nl = [...prev, { ...ex[i], id }].sort((a,b) => (b.id > a.id ? 1 : -1)); localStorage.setItem('mjod_batches', JSON.stringify(nl)); return nl; }); }
+                    else { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(id).set(ex[i]); }
                 }
                 alert("Två testbatcher har lagts till!");
-                handleLoadBatch({...b1, id: Date.now().toString()});
             };
 
             const handleCreateReminder = (days) => {
-                const d = new Date(); d.setDate(d.getDate() + days); d.setHours(18,0,0,0);
-                const iso = d.toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
-                const content = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:${iso}\nSUMMARY:Mjöd: ${batchName}\nEND:VEVENT\nEND:VCALENDAR`;
+                const targetD = new Date(); targetD.setDate(targetD.getDate() + days);
+                const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+                const targetDStr = targetD.toISOString().split('T')[0].replace(/-/g, '/');
+                
+                const label = reminderOptions[reminderType].label;
+                setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: Planerad åtgärd den ${targetDStr} - ${label}\n`);
+
+                const iso = targetD.toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
+                const content = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:${iso}\nSUMMARY:Mjöd (${label}): ${batchName}\nEND:VEVENT\nEND:VCALENDAR`;
                 const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], {type: 'text/calendar'}));
                 a.download = `mjod-event.ics`; a.click(); setShowReminderMenu(false);
             };
 
             const confirmDeleteBatch = async () => {
                 if (batchToDelete) {
-                    if (isOffline) {
-                        const nl = savedBatches.filter(b => b.id !== batchToDelete);
-                        setSavedBatches(nl); localStorage.setItem('mjod_batches', JSON.stringify(nl));
-                    } else { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(batchToDelete).delete(); }
+                    if (isOffline) { const nl = savedBatches.filter(b => b.id !== batchToDelete); setSavedBatches(nl); localStorage.setItem('mjod_batches', JSON.stringify(nl)); }
+                    else { await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('batches').doc(batchToDelete).delete(); }
                     if (currentBatchId === batchToDelete) proceedToNewBatch();
                     setShowDeleteModal(false); setBatchToDelete(null);
                 }
@@ -389,8 +350,8 @@
             const attenuation = calculateAttenuation();
             const sweetness = getSweetnessStatus();
             const graphData = getGraphData();
-            const oechsleOptions = Array.from({ length: 136 }, (_, i) => i - 15);
-            const remOpts = getReminderOptions();
+            const oechsleOptions = Array.from({ length: 156 }, (_, i) => i - 15);
+            const remOpts = reminderOptions[reminderType].options;
 
             return (
                 <div className="flex flex-col min-h-screen bg-slate-900 text-orange-100 selection:bg-orange-500/30">
@@ -398,14 +359,14 @@
                     {/* MODALER */}
                     {showInfo && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowInfo(false)}>
-                            <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                            <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto custom-scrollbar p-6" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
-                                    <h2 className="text-xl font-bold text-orange-400 flex gap-2"><Icon name="Info"/> Mjödbryggnings-guide</h2>
+                                    <h2 className="text-xl font-bold text-orange-400 flex gap-2"><Icon name="Info"/> Guide</h2>
                                     <button onClick={() => setShowInfo(false)} className="text-slate-400 hover:text-white transition-colors"><Icon name="X"/></button>
                                 </div>
                                 <div className="space-y-6 text-sm text-slate-300 leading-relaxed">
                                     <section>
-                                        <h3 className="font-bold text-orange-200 border-b border-slate-700 pb-1 mb-2 uppercase tracking-wider text-xs">Hur man använder appen</h3>
+                                        <h3 className="font-bold text-orange-200 uppercase text-xs border-b border-slate-700 mb-2 pb-1">Hur man använder appen</h3>
                                         <ul className="list-disc pl-5 space-y-2">
                                             <li><span className="text-orange-100 font-medium">Spara & Synka:</span> Dina batcher sparas automatiskt i molnet om du är inloggad. Klicka på "Spara" för att skicka upp senaste ändringarna.</li>
                                             <li><span className="text-orange-100 font-medium">Logg & Graf:</span> Skriv ner dina mätningar i loggen med formatet <code className="bg-slate-950 px-1 rounded text-orange-400">ÅÅÅÅ/MM/DD: 10 °Oe</code> så ritas grafen automatiskt.</li>
@@ -414,17 +375,17 @@
                                     </section>
 
                                     <section>
-                                        <h3 className="font-bold text-orange-200 border-b border-slate-700 pb-1 mb-2 uppercase tracking-wider text-xs">Att mäta Öchsle (°Oe)</h3>
+                                        <h3 className="font-bold text-orange-200 uppercase text-xs border-b border-slate-700 mb-2 pb-1">Att mäta Öchsle (°Oe)</h3>
                                         <p className="mb-2">Öchslevikten talar om hur mycket socker som finns i vätskan. </p>
                                         <ul className="list-disc pl-5 space-y-2">
                                             <li><span className="text-orange-100 font-medium">OG (Original Gravity):</span> Värdet innan jäsning. Avgör hur starkt mjödet kan bli.</li>
                                             <li><span className="text-orange-100 font-medium">FG (Final Gravity):</span> Värdet när det slutat jäsa. Avgör hur sött det färdiga mjödet är.</li>
-                                            <li><span className="text-orange-100 font-medium">Temperatur:</span> Mätaren är kalibrerad för 20°C. Om vätskan är varmare eller kallare korrigerar appen detta automatiskt (0.2 °Oe per grad).</li>
+                                            <li><span className="text-orange-100 font-medium">Temperatur:</span> Mätaren är kalibrerad för 20°C. Om vätskan är varmare eller kallare korrigerar appen detta automatiskt (+/- 0.2 per grad).</li>
                                         </ul>
                                     </section>
 
                                     <section>
-                                        <h3 className="font-bold text-orange-200 border-b border-slate-700 pb-1 mb-2 uppercase tracking-wider text-xs">Sötma-skala (FG)</h3>
+                                        <h3 className="font-bold text-orange-200 uppercase text-xs border-b border-slate-700 mb-2 pb-1">Sötma-skala (FG)</h3>
                                         <div className="grid grid-cols-2 gap-2 text-xs">
                                             <div className="bg-slate-900 p-2 rounded border border-slate-700"><strong>Torrt:</strong> Under 4 °Oe</div>
                                             <div className="bg-slate-900 p-2 rounded border border-slate-700"><strong>Halvtorrt:</strong> 4 - 12 °Oe</div>
@@ -441,14 +402,14 @@
                             </div>
                         </div>
                     )}
-                    
+
                     {showDeleteModal && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}>
                             <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-                                <h3 className="text-lg font-bold text-orange-400 mb-2 flex gap-2"><Icon name="Trash2"/> Ta bort batch?</h3>
+                                <h3 className="text-lg font-bold text-orange-400 mb-2 flex gap-2"><Icon name="Trash2"/> Ta bort?</h3>
                                 <div className="flex justify-end gap-2 mt-4">
-                                    <button onClick={() => setShowDeleteModal(false)} className="px-3 py-1.5 rounded hover:bg-slate-700 transition-colors">Avbryt</button>
-                                    <button onClick={confirmDeleteBatch} className="px-3 py-1.5 rounded bg-red-900 text-white hover:bg-red-800 transition-colors">Ta bort</button>
+                                    <button onClick={() => setShowDeleteModal(false)} className="px-3 py-1.5 rounded hover:bg-slate-700">Avbryt</button>
+                                    <button onClick={confirmDeleteBatch} className="px-3 py-1.5 rounded bg-red-900 text-white">Ta bort</button>
                                 </div>
                             </div>
                         </div>
@@ -457,11 +418,11 @@
                     {showNewBatchConfirm && (
                         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowNewBatchConfirm(false)}>
                             <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-                                <h3 className="text-lg font-bold text-orange-400 mb-2 flex gap-2"><Icon name="AlertTriangle"/> Skapa ny batch?</h3>
-                                <p className="text-slate-300 text-sm mb-4">Kom ihåg att spara dina ändringar först!</p>
+                                <h3 className="text-lg font-bold text-orange-400 mb-2 flex gap-2"><Icon name="AlertTriangle"/> Ny batch?</h3>
+                                <p className="text-slate-300 text-sm mb-4">Spara nuvarande först!</p>
                                 <div className="flex flex-col gap-2">
-                                    <button onClick={() => { handleSaveBatch(); setShowNewBatchConfirm(false); }} className="w-full bg-orange-500 text-slate-950 font-bold py-2 rounded hover:bg-orange-400 transition-colors">Spara nuvarande först</button>
-                                    <button onClick={proceedToNewBatch} className="w-full py-2 rounded hover:bg-slate-700 text-slate-400 text-xs transition-colors">Fortsätt utan att spara</button>
+                                    <button onClick={() => { handleSaveBatch(); setShowNewBatchConfirm(false); }} className="w-full bg-orange-500 text-slate-950 font-bold py-2 rounded hover:bg-orange-400">Spara först</button>
+                                    <button onClick={proceedToNewBatch} className="w-full py-2 rounded hover:bg-slate-700 text-slate-400 text-xs">Fortsätt utan att spara</button>
                                 </div>
                             </div>
                         </div>
@@ -472,7 +433,7 @@
                         <div className="max-w-2xl mx-auto w-full p-4 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <h1 className="text-xl font-bold tracking-tight text-orange-400">Mjöd</h1>
-                                <span onClick={handleFillTestData} className="text-[10px] font-mono border border-orange-500/20 px-1.5 py-0.5 rounded cursor-pointer hover:text-orange-200" title="Skapa två test-batcher">v1.2.3</span>
+                                <span onClick={handleFillTestData} className="text-[10px] font-mono border border-orange-500/20 px-1.5 py-0.5 rounded cursor-pointer hover:text-orange-200" title="Skapa test-batcher">v1.2.5</span>
                                 <button onClick={() => setShowInfo(true)} className="text-slate-500 hover:text-orange-400"><Icon name="Info" size={18}/></button>
                             </div>
                             <div className="flex items-center gap-2">
@@ -530,7 +491,7 @@
                                         <input type="text" value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="Namn..." className={`w-full bg-slate-950/50 border rounded-md px-3 py-2 text-sm text-orange-100 focus:outline-none focus:ring-1 ${nameError ? 'border-red-500/50 focus:border-red-500' : 'border-slate-700 focus:border-orange-500/50'}`}/>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 transition-colors hover:border-slate-600">
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
                                             <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Startdatum</label>
                                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none" style={{colorScheme:'dark'}}/>
                                         </div>
@@ -539,7 +500,7 @@
                                             <div className="text-xs font-medium text-orange-300 italic">{sweetness}</div>
                                         </div>
                                     </div>
-                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 transition-colors hover:border-slate-600">
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
                                         <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Ingredienser</label>
                                         <textarea rows="8" value={ingredients} onChange={e => setIngredients(e.target.value)} placeholder="Honung, vatten..." className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none resize-none custom-scrollbar font-medium"/>
                                     </div>
@@ -604,7 +565,7 @@
                                         </div>
                                         <div className="h-px flex-1 bg-slate-700/50"></div>
                                     </div>
-                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 transition-colors hover:border-slate-600">
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
                                         <textarea rows="6" value={log} onChange={e => setLog(e.target.value)} placeholder="Anteckningar..." className="w-full bg-transparent border-none text-sm text-orange-100 font-mono mb-2 custom-scrollbar focus:outline-none"/>
                                     </div>
 
@@ -613,7 +574,6 @@
                                     <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700/50 overflow-visible">
                                         {graphData.length > 1 ? (
                                             <div className="h-48 w-full flex">
-                                                {/* Y-axel labels */}
                                                 <div className="w-10 flex flex-col justify-between items-end pr-2 text-[11px] text-slate-400 font-mono py-1">
                                                     <span>{Math.max(...graphData.map(d => d.value)) + 5}</span>
                                                     <span>{Math.round((Math.max(...graphData.map(d => d.value)) + Math.min(...graphData.map(d => d.value))) / 2)}</span>
@@ -634,7 +594,7 @@
                                                             const x = (i / (graphData.length - 1)) * 100;
                                                             const range = Math.max(...graphData.map(d => d.value)) + 5 - (Math.min(...graphData.map(d => d.value)) - 5);
                                                             const y = 100 - ((pt.value - (Math.min(...graphData.map(d => d.value)) - 5)) / range * 100);
-                                                            return <div key={i} className={`absolute w-2.5 h-2.5 rounded-full -ml-1.5 -mt-1.5 border-2 border-orange-400 group cursor-help ${pt.type==='start'?'bg-slate-900':'bg-orange-400'}`} style={{left: `${x}%`, top: `${y}%`}}><div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 text-orange-200 text-xs px-2 py-1 rounded border border-slate-700 z-50 whitespace-nowrap shadow-xl">{pt.value} °Oe</div></div>;
+                                                            return <div key={i} className={`absolute w-2.5 h-2.5 rounded-full -ml-1.5 -mt-1.5 border-2 border-orange-400 group cursor-help ${pt.type==='start'?'bg-slate-900':'bg-orange-400'}`} style={{left: `${x}%`, top: `${y}%`}}><div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 text-orange-200 text-[11px] px-2 py-1 rounded border border-slate-700 z-50 whitespace-nowrap shadow-xl">{pt.value} °Oe</div></div>;
                                                         })}
                                                     </div>
                                                     <div className="h-6 relative mt-2">
