@@ -57,7 +57,8 @@
                 LogOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></>,
                 User: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
                 Download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
-                Upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                Upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
+                Scale: <><path d="m16 16 3-8 3 8c-.87.62-1.9.87-3 .87s-2.13-.25-3-.87Z"/><path d="m2 16 3-8 3 8c-.87.62-1.9.87-3 .87s-2.13-.25-3-.87Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -94,6 +95,9 @@
             const [showNewBatchConfirm, setShowNewBatchConfirm] = useState(false); 
             const [batchToDelete, setBatchToDelete] = useState(null);
             const [showReminderMenu, setShowReminderMenu] = useState(false);
+            const [showSweetenMenu, setShowSweetenMenu] = useState(false);
+            const [sweetenVolume, setSweetenVolume] = useState(4.5);
+            const [sweetenTargetFg, setSweetenTargetFg] = useState(20);
             const [reminderType, setReminderType] = useState('measure');
             const [nameError, setNameError] = useState(false);
             
@@ -359,6 +363,11 @@
                 }
             };
 
+            const calculateHoneyForSweetening = () => {
+                const diff = Math.max(0, parseFloat(sweetenTargetFg) - getCorrectedGravity(fg, fgTemp));
+                return Math.round(diff * parseFloat(sweetenVolume) * 2.7);
+            };
+
             const potentialABV = calculatePotentialABV();
             const currentABV = calculateCurrentABV();
             const attenuation = calculateAttenuation();
@@ -554,6 +563,36 @@
                                         <div className="h-px flex-1 bg-slate-700/50"></div>
                                         <div className="flex items-center gap-3">
                                             <button onClick={handleAddDateOnly} className="flex items-center gap-1 text-orange-400/50 hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded"><Icon name="Plus" size={14}/><span className="text-[10px] font-bold uppercase">Logg</span></button>
+                                            <div className="relative">
+                                                <button onClick={() => setShowSweetenMenu(!showSweetenMenu)} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showSweetenMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Sötningskalkylator"><Icon name="Scale" size={14}/></button>
+                                                {showSweetenMenu && (
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-3 w-56 z-20 animate-in fade-in zoom-in-95 duration-100">
+                                                        <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
+                                                            <label className="text-[10px] text-orange-400 font-bold uppercase">Sötningskalkylator</label>
+                                                            <button onClick={() => setShowSweetenMenu(false)} className="text-slate-500 hover:text-orange-400 transition-colors"><Icon name="X" size={12} /></button>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            <div>
+                                                                <label className="text-[9px] text-slate-400 uppercase block mb-1">Volym (Litre)</label>
+                                                                <input type="number" step="0.5" value={sweetenVolume} onChange={e => setSweetenVolume(e.target.value)} className="w-full bg-slate-900 text-xs text-orange-100 p-1.5 rounded border border-slate-700 focus:outline-none focus:border-orange-500/50"/>
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[9px] text-slate-400 uppercase block mb-1">Mål-FG (°Oe)</label>
+                                                                <select value={sweetenTargetFg} onChange={e => setSweetenTargetFg(e.target.value)} className="w-full bg-slate-900 text-xs text-orange-100 p-1.5 rounded border border-slate-700 focus:outline-none focus:border-orange-500/50 cursor-pointer">
+                                                                    {oechsleOptions.filter(v => v >= 0).map(v => <option key={v} value={v}>{v} °Oe</option>)}
+                                                                </select>
+                                                            </div>
+                                                            <div className="pt-2 border-t border-slate-700/50">
+                                                                <div className="text-[10px] text-slate-400 mb-1 italic">Honung som behövs:</div>
+                                                                <div className="text-lg font-bold text-orange-400 flex items-baseline gap-1">
+                                                                    {calculateHoneyForSweetening()} <span className="text-xs font-normal text-slate-500">gram</span>
+                                                                </div>
+                                                                <p className="text-[8px] text-slate-500 mt-2 leading-tight">Baserat på ~2.7g honung per liter för att höja 1 °Oe.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <button onClick={() => setShowReminderMenu(!showReminderMenu)} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showReminderMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`}><Icon name="Bell" size={14}/></button>
                                                 {showReminderMenu && (
