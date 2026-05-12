@@ -186,19 +186,20 @@
             // UPPDATERAD: Hämtar nu enbart data från loggen och startvärdet (OG)
             const getGraphData = () => {
                 const dataPoints = [];
+                const toYYMMDD = (dStr) => {
+                    const d = new Date(dStr.replace(/\//g, '-'));
+                    return d.toISOString().split('T')[0].substring(2).replace(/-/g, '');
+                };
                 
-                // 1. Lägg till OG som startpunkt (alltid vid startdatum)
                 if (og > 0 && startDate) {
                     dataPoints.push({
                         date: new Date(startDate).getTime(),
-                        displayDate: startDate.substring(5).replace('-', '/'),
+                        displayDate: toYYMMDD(startDate),
                         value: parseFloat(og),
                         type: 'start'
                     });
                 }
                 
-                // 2. Parsa loggen för historiska punkter
-                // Letar efter format: "- ÅÅÅÅ/MM/DD: [värde] °Oe"
                 const regex = /- (\d{4}\/\d{2}\/\d{2}):\s*(-?\d+)\s*°Oe/g;
                 let match;
                 while ((match = regex.exec(log)) !== null) {
@@ -207,19 +208,13 @@
                     if (!isNaN(val)) {
                         dataPoints.push({
                             date: new Date(dStr).getTime(),
-                            displayDate: match[1].substring(5),
+                            displayDate: toYYMMDD(match[1]),
                             value: val,
                             type: 'log'
                         });
                     }
                 }
-
-                // 3. Sortera mätpunkter kronologiskt
                 dataPoints.sort((a, b) => a.date - b.date);
-
-                // NOTERA: Steg 4 (Live-punkten) är borttagen enligt användarens önskemål.
-                // Grafen ritar nu bara vad som faktiskt finns loggat.
-
                 return dataPoints;
             };
 
@@ -294,6 +289,11 @@
             const handleAddBottling = () => {
                 const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
                 setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: BUTELJERAD\n`);
+            };
+
+            const handleAddStartLog = () => {
+                const datePart = startDate.replace(/-/g, '/');
+                setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${datePart}: STARTAD (OG: ${og} °Oe)\n`);
             };
 
             const getBottlingDate = () => {
@@ -571,7 +571,8 @@
                                             </div>
                                             <input type="text" value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="Namn..." className={`w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none focus:ring-0 ${nameError ? 'placeholder-red-400' : ''}`}/>
                                         </div>
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 relative group">
+                                            <button onClick={handleAddStartLog} className="absolute top-1 right-1 text-orange-500/50 hover:text-orange-400 transition-colors" title="Spara startdatum till loggen"><Icon name="Save" size={14}/></button>
                                             <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Startdatum</label>
                                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none" style={{colorScheme:'dark'}}/>
                                         </div>
