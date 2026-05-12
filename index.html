@@ -29,6 +29,31 @@
         .saving-pulse { animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
         select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+        
+        @media print {
+            body { background-color: white !important; color: black !important; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            @page { margin: 0; size: A4; }
+            .label-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10mm;
+                padding: 15mm;
+            }
+            .bottle-label {
+                width: 90mm;
+                height: 60mm;
+                border: 1px dashed #ccc;
+                padding: 5mm;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                position: relative;
+                overflow: hidden;
+            }
+        }
+        .print-only { display: none; }
     </style>
 </head>
 <body>
@@ -58,7 +83,8 @@
                 User: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
                 Download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
                 Upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
-                Scale: <><path d="m16 16 3-8 3 8c-.87.62-1.9.87-3 .87s-2.13-.25-3-.87Z"/><path d="m2 16 3-8 3 8c-.87.62-1.9.87-3 .87s-2.13-.25-3-.87Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></>
+                Scale: <><path d="m16 16 3-8 3 8c-.87.62-1.9.87-3 .87s-2.13-.25-3-.87Z"/><path d="m2 16 3-8 3 8c-.87.62-1.9.87-3 .87s-2.13-.25-3-.87Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></>,
+                Printer: <><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -579,12 +605,12 @@
                                                             <div>
                                                                 <label className="text-[9px] text-slate-400 uppercase block mb-1">Mål-FG (°Oe)</label>
                                                                 <select value={sweetenTargetFg} onChange={e => setSweetenTargetFg(e.target.value)} className="w-full bg-slate-900 text-xs text-orange-100 p-1.5 rounded border border-slate-700 focus:outline-none focus:border-orange-500/50 cursor-pointer">
-                                                                    {oechsleOptions.filter(v => v >= 0).map(v => {
+                                                                    {[0, 10, 20, 30, 40, 50, 60, 70, 80].map(v => {
                                                                         let label = "";
-                                                                        if (v >= 45) label = "Dessert";
-                                                                        else if (v >= 25) label = "Sött";
-                                                                        else if (v >= 12) label = "Halvsött";
-                                                                        else if (v >= 4) label = "Halvtorrt";
+                                                                        if (v >= 50) label = "Dessert";
+                                                                        else if (v >= 30) label = "Sött";
+                                                                        else if (v >= 20) label = "Halvsött";
+                                                                        else if (v >= 10) label = "Halvtorrt";
                                                                         else label = "Torrt";
                                                                         return <option key={v} value={v} className="bg-slate-900">{v} °Oe ({label})</option>;
                                                                     })}
@@ -623,6 +649,7 @@
                                                     </div>
                                                 )}
                                             </div>
+                                            <button onClick={() => window.print()} className="hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded text-orange-400/50" title="Skriv ut etiketter"><Icon name="Printer" size={14}/></button>
                                         </div>
                                         <div className="h-px flex-1 bg-slate-700/50"></div>
                                     </div>
@@ -673,6 +700,47 @@
                             </section>
                         </div>
                     </main>
+
+                    {/* UTSKRIFTSVY (Etiketter) */}
+                    <div className="print-only">
+                        <div className="label-grid">
+                            {Array.from({ length: 8 }).map((_, i) => (
+                                <div key={i} className="bottle-label">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h1 className="text-lg font-bold leading-tight">{batchName || "Namnlös Brygd"}</h1>
+                                            <p className="text-[10px] text-gray-600 uppercase tracking-widest">Hemgjort Mjöd</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-sm font-bold text-orange-600">{currentABV}%</div>
+                                            <div className="text-[8px] text-gray-500 uppercase">{sweetness}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex-1 my-2 border-y border-gray-100 py-2 overflow-hidden">
+                                        <p className="text-[8px] text-gray-500 uppercase mb-1 font-bold">Ingredienser</p>
+                                        <p className="text-[9px] leading-tight text-gray-700 italic">{ingredients || "Honung, vatten, jäst"}</p>
+                                    </div>
+
+                                    <div className="flex justify-between items-end">
+                                        <div className="space-y-0.5">
+                                            <p className="text-[8px] text-gray-400">Batch #{currentBatchId?.slice(-4) || "0000"}</p>
+                                            <p className="text-[8px] text-gray-400">Buteljerad: {new Date().toLocaleDateString('sv-SE')}</p>
+                                            <p className="text-[7px] text-gray-300 mt-1 uppercase">Bryggd med Mjöd Pro</p>
+                                        </div>
+                                        <div className="w-12 h-12 bg-gray-50 flex items-center justify-center border border-gray-100">
+                                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.href)}`} className="w-10 h-10 opacity-80" />
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Bee Icon Placeholder */}
+                                    <div className="absolute -top-2 -right-2 opacity-5 scale-150 rotate-12 pointer-events-none">
+                                        <Icon name="Archive" size={80}/>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             );
         }
