@@ -87,7 +87,10 @@
                 Upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
                 Scale: <><path d="m16 16 3-8 3 8c-.87.62-1.9.87-3 .87s-2.13-.25-3-.87Z"/><path d="m2 16 3-8 3 8c-.87.62-1.9.87-3 .87s-2.13-.25-3-.87Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></>,
                 Printer: <><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></>,
-                Bottle: <><path d="M9 3h6v3a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2V3z"/><path d="M9 6h6"/><path d="M12 3v3"/></>
+                Bottle: <><path d="M9 3h6v3a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2V3z"/><path d="M9 6h6"/><path d="M12 3v3"/></>,
+                Shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
+                Droplet: <path d="m12 22 4.5-4.5c.9-.9 1.5-2.1 1.5-3.5A6 6 0 1 0 6 14c0 1.4.6 2.6 1.5 3.5L12 22z"/>,
+                AlertTriangle: <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3ZM12 9v4m0 4h.01"/>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -125,8 +128,12 @@
             const [batchToDelete, setBatchToDelete] = useState(null);
             const [showReminderMenu, setShowReminderMenu] = useState(false);
             const [showSweetenMenu, setShowSweetenMenu] = useState(false);
+            const [showStabilizerMenu, setShowStabilizerMenu] = useState(false);
+            const [showBentoniteMenu, setShowBentoniteMenu] = useState(false);
             const [sweetenVolume, setSweetenVolume] = useState(4.5);
             const [sweetenTargetFg, setSweetenTargetFg] = useState(20);
+            const [stabilizerVolume, setStabilizerVolume] = useState(5);
+            const [bentoniteVolume, setBentoniteVolume] = useState(5);
             const [reminderType, setReminderType] = useState('measure');
             const [nameError, setNameError] = useState(false);
             
@@ -134,6 +141,7 @@
             const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
             const [honeyType, setHoneyType] = useState('');
             const [honeyAmount, setHoneyAmount] = useState('');
+            const [waterAmount, setWaterAmount] = useState('');
             const [yeastType, setYeastType] = useState('');
             const [ingredients, setIngredients] = useState('');
             const [log, setLog] = useState('');
@@ -181,6 +189,35 @@
                 const start = new Date(d); const today = new Date();
                 start.setHours(0,0,0,0); today.setHours(0,0,0,0);
                 return Math.max(0, Math.floor((today - start) / (1000 * 60 * 60 * 24)));
+            };
+
+            const calculateHoneyForSweetening = () => {
+                const diff = Math.max(0, parseFloat(sweetenTargetFg) - getCorrectedGravity(fg, fgTemp));
+                return Math.round(diff * parseFloat(sweetenVolume) * 2.7);
+            };
+
+            const calculateStabilizerAmount = () => (parseFloat(stabilizerVolume) * 0.1).toFixed(1);
+            const calculateBentoniteAmount = () => (parseFloat(bentoniteVolume) * 1).toFixed(1);
+
+            const handleLogSweetening = () => {
+                const amount = calculateHoneyForSweetening();
+                const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+                setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: Tillsatt ${amount}g honung för eftersötning (Mål: ${sweetenTargetFg} °Oe)\n`);
+                setShowSweetenMenu(false);
+            };
+
+            const handleLogStabilizer = () => {
+                const amount = calculateStabilizerAmount();
+                const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+                setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: Stabiliserat med ${amount}g vinsvavla (${stabilizerVolume}L)\n`);
+                setShowStabilizerMenu(false);
+            };
+
+            const handleLogBentonite = () => {
+                const amount = calculateBentoniteAmount();
+                const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+                setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: Klarning med ${amount}g bentonit (${bentoniteVolume}L)\n`);
+                setShowBentoniteMenu(false);
             };
 
             // UPPDATERAD: Hämtar nu enbart data från loggen och startvärdet (OG)
@@ -310,7 +347,7 @@
                 if (!batchName.trim()) return setNameError(true);
                 if (isSaving) return;
                 setIsSaving(true);
-                const data = { name: batchName, startDate, lastModified: new Date().toLocaleDateString('sv-SE'), ingredients, log, og, ogTemp, fg, fgTemp, honeyType, honeyAmount, yeastType };
+                const data = { name: batchName, startDate, lastModified: new Date().toLocaleDateString('sv-SE'), ingredients, log, og, ogTemp, fg, fgTemp, honeyType, honeyAmount, waterAmount, yeastType };
                 try {
                     let finalId = currentBatchId || Date.now().toString();
                     if (!currentBatchId) setCurrentBatchId(finalId);
@@ -328,6 +365,7 @@
             const handleLoadBatch = (b) => {
                 setCurrentBatchId(b.id); setBatchName(b.name); setStartDate(b.startDate || new Date().toISOString().split('T')[0]);
                 setHoneyType(b.honeyType || ''); setHoneyAmount(b.honeyAmount || '');
+                setWaterAmount(b.waterAmount || '');
                 setYeastType(b.yeastType || '');
                 setIngredients(b.ingredients || ''); setLog(b.log || ''); setOg(b.og || 0); setOgTemp(b.ogTemp || 20);
                 setFg(b.fg || 0); setFgTemp(b.fgTemp || 20); setNameError(false); setShowBatchMenu(false);
@@ -371,6 +409,7 @@
             const handleNewBatchClick = () => setShowNewBatchConfirm(true);
             const proceedToNewBatch = () => {
                 setCurrentBatchId(null); setBatchName(''); setStartDate(new Date().toISOString().split('T')[0]);
+                setHoneyType(''); setHoneyAmount(''); setWaterAmount(''); setYeastType('');
                 setIngredients(''); setLog(''); setOg(0); setOgTemp(20); setFg(0); setFgTemp(20);
                 setNameError(false); setShowNewBatchConfirm(false); setShowBatchMenu(false);
             };
@@ -418,11 +457,6 @@
                     if (currentBatchId === batchToDelete) proceedToNewBatch();
                     setShowDeleteModal(false); setBatchToDelete(null);
                 }
-            };
-
-            const calculateHoneyForSweetening = () => {
-                const diff = Math.max(0, parseFloat(sweetenTargetFg) - getCorrectedGravity(fg, fgTemp));
-                return Math.round(diff * parseFloat(sweetenVolume) * 2.7);
             };
 
             const potentialABV = calculatePotentialABV();
@@ -583,9 +617,15 @@
                                                 <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Honungssort</label>
                                                 <input type="text" value={honeyType} onChange={e => setHoneyType(e.target.value)} placeholder="" className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none"/>
                                             </div>
-                                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                                <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Mängd honung (g)</label>
-                                                <input type="number" value={honeyAmount} onChange={e => setHoneyAmount(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none"/>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                                    <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Honung (g)</label>
+                                                    <input type="number" value={honeyAmount} onChange={e => setHoneyAmount(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none"/>
+                                                </div>
+                                                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                                    <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Vatten (ml)</label>
+                                                    <input type="number" value={waterAmount} onChange={e => setWaterAmount(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none"/>
+                                                </div>
                                             </div>
                                             <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
                                                 <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Jästsort</label>
@@ -594,7 +634,7 @@
                                         </div>
                                         <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 flex flex-col">
                                             <label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">Övriga Ingredienser</label>
-                                            <textarea rows="8" value={ingredients} onChange={e => setIngredients(e.target.value)} placeholder="Vatten, kryddor..." className="w-full flex-1 bg-transparent border-none text-sm text-orange-100 focus:outline-none resize-none custom-scrollbar font-medium"/>
+                                            <textarea rows="5" value={ingredients} onChange={e => setIngredients(e.target.value)} placeholder="Kryddor, näring..." className="w-full flex-1 bg-transparent border-none text-sm text-orange-100 focus:outline-none resize-none custom-scrollbar font-medium"/>
                                         </div>
                                     </div>
 
@@ -633,12 +673,14 @@
                                         <div className="h-px flex-1 bg-slate-700/50"></div>
                                         <div className="flex items-center gap-3">
                                             <button onClick={handleAddDateOnly} className="flex items-center gap-1 text-orange-400/50 hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded" title="Lägg till nytt datum i loggen"><Icon name="Plus" size={14}/><span className="text-[10px] font-bold uppercase">Logg</span></button>
+                                            
+                                            {/* Sötningskalkylator */}
                                             <div className="relative">
-                                                <button onClick={() => setShowSweetenMenu(!showSweetenMenu)} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showSweetenMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Sötningskalkylator"><Icon name="Scale" size={14}/></button>
+                                                <button onClick={() => { setShowSweetenMenu(!showSweetenMenu); setShowReminderMenu(false); setShowStabilizerMenu(false); setShowBentoniteMenu(false); }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showSweetenMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Sötningskalkylator"><Icon name="Scale" size={14}/></button>
                                                 {showSweetenMenu && (
                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-3 w-56 z-20 animate-in fade-in zoom-in-95 duration-100">
                                                         <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
-                                                            <label className="text-[10px] text-orange-400 font-bold uppercase">Sötningskalkylator</label>
+                                                            <label className="text-[10px] text-orange-400 font-bold uppercase">Sötning</label>
                                                             <button onClick={() => setShowSweetenMenu(false)} className="text-slate-500 hover:text-orange-400 transition-colors" title="Stäng"><Icon name="X" size={12} /></button>
                                                         </div>
                                                         <div className="space-y-3">
@@ -649,30 +691,83 @@
                                                             <div>
                                                                 <label className="text-[9px] text-slate-400 uppercase block mb-1">Mål-FG (°Oe)</label>
                                                                 <select value={sweetenTargetFg} onChange={e => setSweetenTargetFg(e.target.value)} className="w-full bg-slate-900 text-xs text-orange-100 p-1.5 rounded border border-slate-700 focus:outline-none focus:border-orange-500/50 cursor-pointer">
-                                                                    {[0, 10, 20, 30, 40, 50, 60, 70, 80].map(v => {
-                                                                        let label = "";
-                                                                        if (v >= 50) label = "Dessert";
-                                                                        else if (v >= 30) label = "Sött";
-                                                                        else if (v >= 20) label = "Halvsött";
-                                                                        else if (v >= 10) label = "Halvtorrt";
-                                                                        else label = "Torrt";
-                                                                        return <option key={v} value={v} className="bg-slate-900">{v} °Oe ({label})</option>;
-                                                                    })}
+                                                                    {[0, 10, 20, 30, 40, 50, 60, 70, 80].map(v => <option key={v} value={v} className="bg-slate-900">{v} °Oe</option>)}
                                                                 </select>
                                                             </div>
                                                             <div className="pt-2 border-t border-slate-700/50">
-                                                                <div className="text-[10px] text-slate-400 mb-1 italic">Honung som behövs:</div>
-                                                                <div className="text-lg font-bold text-orange-400 flex items-baseline gap-1">
-                                                                    {calculateHoneyForSweetening()} <span className="text-xs font-normal text-slate-500">gram</span>
+                                                                <div className="flex justify-between items-end">
+                                                                    <div>
+                                                                        <div className="text-[10px] text-slate-400 italic">Honung:</div>
+                                                                        <div className="text-lg font-bold text-orange-400">{calculateHoneyForSweetening()}g</div>
+                                                                    </div>
+                                                                    <button onClick={handleLogSweetening} className="bg-orange-500 hover:bg-orange-400 text-slate-950 p-1.5 rounded transition-colors" title="Lägg till i loggen"><Icon name="Plus" size={14}/></button>
                                                                 </div>
-                                                                <p className="text-[8px] text-slate-500 mt-2 leading-tight">Baserat på ~2.7g honung per liter för att höja 1 °Oe.</p>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 )}
                                             </div>
+
+                                            {/* Stabiliseringskalkylator */}
                                             <div className="relative">
-                                                <button onClick={() => setShowReminderMenu(!showReminderMenu)} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showReminderMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Planera påminnelser"><Icon name="Bell" size={14}/></button>
+                                                <button onClick={() => { setShowStabilizerMenu(!showStabilizerMenu); setShowReminderMenu(false); setShowSweetenMenu(false); setShowBentoniteMenu(false); }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showStabilizerMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Stabiliseringskalkylator (Vinsvavla)"><Icon name="Shield" size={14}/></button>
+                                                {showStabilizerMenu && (
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-3 w-56 z-20 animate-in fade-in zoom-in-95 duration-100">
+                                                        <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
+                                                            <label className="text-[10px] text-orange-400 font-bold uppercase">Stabilisering</label>
+                                                            <button onClick={() => setShowStabilizerMenu(false)} className="text-slate-500 hover:text-orange-400 transition-colors" title="Stäng"><Icon name="X" size={12} /></button>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            <div>
+                                                                <label className="text-[9px] text-slate-400 uppercase block mb-1">Volym (Liter)</label>
+                                                                <input type="number" step="0.5" value={stabilizerVolume} onChange={e => setStabilizerVolume(e.target.value)} className="w-full bg-slate-900 text-xs text-orange-100 p-1.5 rounded border border-slate-700 focus:outline-none focus:border-orange-500/50"/>
+                                                            </div>
+                                                            <div className="pt-2 border-t border-slate-700/50">
+                                                                <div className="flex justify-between items-end">
+                                                                    <div>
+                                                                        <div className="text-[10px] text-slate-400 italic">Vinsvavla:</div>
+                                                                        <div className="text-lg font-bold text-orange-400">{calculateStabilizerAmount()}g</div>
+                                                                    </div>
+                                                                    <button onClick={handleLogStabilizer} className="bg-orange-500 hover:bg-orange-400 text-slate-950 p-1.5 rounded transition-colors" title="Lägg till i loggen"><Icon name="Plus" size={14}/></button>
+                                                                </div>
+                                                                <p className="text-[8px] text-slate-500 mt-2">Baserat på 1g per 10L.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Bentonitkalkylator */}
+                                            <div className="relative">
+                                                <button onClick={() => { setShowBentoniteMenu(!showBentoniteMenu); setShowReminderMenu(false); setShowSweetenMenu(false); setShowStabilizerMenu(false); }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showBentoniteMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Bentonitkalkylator"><Icon name="Droplet" size={14}/></button>
+                                                {showBentoniteMenu && (
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-3 w-56 z-20 animate-in fade-in zoom-in-95 duration-100">
+                                                        <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
+                                                            <label className="text-[10px] text-orange-400 font-bold uppercase">Bentonit</label>
+                                                            <button onClick={() => setShowBentoniteMenu(false)} className="text-slate-500 hover:text-orange-400 transition-colors" title="Stäng"><Icon name="X" size={12} /></button>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            <div>
+                                                                <label className="text-[9px] text-slate-400 uppercase block mb-1">Volym (Liter)</label>
+                                                                <input type="number" step="0.5" value={bentoniteVolume} onChange={e => setBentoniteVolume(e.target.value)} className="w-full bg-slate-900 text-xs text-orange-100 p-1.5 rounded border border-slate-700 focus:outline-none focus:border-orange-500/50"/>
+                                                            </div>
+                                                            <div className="pt-2 border-t border-slate-700/50">
+                                                                <div className="flex justify-between items-end">
+                                                                    <div>
+                                                                        <div className="text-[10px] text-slate-400 italic">Bentonit:</div>
+                                                                        <div className="text-lg font-bold text-orange-400">{calculateBentoniteAmount()}g</div>
+                                                                    </div>
+                                                                    <button onClick={handleLogBentonite} className="bg-orange-500 hover:bg-orange-400 text-slate-950 p-1.5 rounded transition-colors" title="Lägg till i loggen"><Icon name="Plus" size={14}/></button>
+                                                                </div>
+                                                                <p className="text-[8px] text-slate-500 mt-2">Baserat på 1g per Liter.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="relative">
+                                                <button onClick={() => { setShowReminderMenu(!showReminderMenu); setShowSweetenMenu(false); setShowStabilizerMenu(false); setShowBentoniteMenu(false); }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showReminderMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Planera påminnelser"><Icon name="Bell" size={14}/></button>
                                                 {showReminderMenu && (
                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-2 w-48 z-20 animate-in fade-in zoom-in-95 duration-100">
                                                         <div className="flex justify-between items-center mb-1 border-b border-slate-700 pb-1">
