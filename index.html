@@ -199,6 +199,14 @@
             const calculateStabilizerAmount = () => (parseFloat(stabilizerVolume) * 0.1).toFixed(1);
             const calculateBentoniteAmount = () => (parseFloat(bentoniteVolume) * 1).toFixed(1);
 
+            const getBatchVolume = () => {
+                const h = parseFloat(honeyAmount) || 0;
+                const w = parseFloat(waterAmount) || 0;
+                // Honung densitet ca 1.4kg/L. Volym = (h/1000)/1.4 + w/1000
+                const vol = ((h / 1000) / 1.4) + (w / 1000);
+                return vol > 0 ? parseFloat(vol.toFixed(1)) : 0;
+            };
+
             const handleLogSweetening = () => {
                 const amount = calculateHoneyForSweetening();
                 const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
@@ -325,7 +333,7 @@
 
             const handleAddBottling = () => {
                 const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
-                setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: BUTELJERAD\n`);
+                setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: Buteljerad\n`);
             };
 
             const handleAddStartLog = () => {
@@ -334,7 +342,7 @@
             };
 
             const getBottlingDate = () => {
-                const regex = /- (\d{4}\/\d{2}\/\d{2}): BUTELJERAD/g;
+                const regex = /- (\d{4}\/\d{2}\/\d{2}): Buteljerad/g;
                 let lastMatch = null;
                 let match;
                 while ((match = regex.exec(log)) !== null) {
@@ -676,7 +684,12 @@
                                             
                                             {/* Sötningskalkylator */}
                                             <div className="relative">
-                                                <button onClick={() => { setShowSweetenMenu(!showSweetenMenu); setShowReminderMenu(false); setShowStabilizerMenu(false); setShowBentoniteMenu(false); }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showSweetenMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Sötningskalkylator"><Icon name="Scale" size={14}/></button>
+                                                <button onClick={() => { 
+                                                const v = getBatchVolume();
+                                                setSweetenVolume(v);
+                                                setShowSweetenMenu(!showSweetenMenu); 
+                                                setShowReminderMenu(false); setShowStabilizerMenu(false); setShowBentoniteMenu(false); 
+                                            }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showSweetenMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Sötningskalkylator"><Icon name="Scale" size={14}/></button>
                                                 {showSweetenMenu && (
                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-3 w-56 z-20 animate-in fade-in zoom-in-95 duration-100">
                                                         <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
@@ -710,7 +723,12 @@
 
                                             {/* Stabiliseringskalkylator */}
                                             <div className="relative">
-                                                <button onClick={() => { setShowStabilizerMenu(!showStabilizerMenu); setShowReminderMenu(false); setShowSweetenMenu(false); setShowBentoniteMenu(false); }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showStabilizerMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Stabiliseringskalkylator (Vinsvavla)"><Icon name="Shield" size={14}/></button>
+                                                <button onClick={() => { 
+                                                const v = getBatchVolume();
+                                                setStabilizerVolume(v);
+                                                setShowStabilizerMenu(!showStabilizerMenu); 
+                                                setShowReminderMenu(false); setShowSweetenMenu(false); setShowBentoniteMenu(false); 
+                                            }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showStabilizerMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Stabiliseringskalkylator (Vinsvavla)"><Icon name="Shield" size={14}/></button>
                                                 {showStabilizerMenu && (
                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-3 w-56 z-20 animate-in fade-in zoom-in-95 duration-100">
                                                         <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
@@ -739,7 +757,12 @@
 
                                             {/* Bentonitkalkylator */}
                                             <div className="relative">
-                                                <button onClick={() => { setShowBentoniteMenu(!showBentoniteMenu); setShowReminderMenu(false); setShowSweetenMenu(false); setShowStabilizerMenu(false); }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showBentoniteMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Bentonitkalkylator"><Icon name="Droplet" size={14}/></button>
+                                                <button onClick={() => { 
+                                                const v = getBatchVolume();
+                                                setBentoniteVolume(v);
+                                                setShowBentoniteMenu(!showBentoniteMenu); 
+                                                setShowReminderMenu(false); setShowSweetenMenu(false); setShowStabilizerMenu(false); 
+                                            }} className={`hover:text-orange-400 transition-colors p-1 hover:bg-slate-900 rounded ${showBentoniteMenu ? 'text-orange-400 bg-slate-900' : 'text-orange-400/50'}`} title="Bentonitkalkylator"><Icon name="Droplet" size={14}/></button>
                                                 {showBentoniteMenu && (
                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-3 w-56 z-20 animate-in fade-in zoom-in-95 duration-100">
                                                         <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
@@ -849,11 +872,9 @@
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <h1 className="text-lg font-bold leading-tight">{batchName || "Namnlös Brygd"}</h1>
-                                            <p className="text-[10px] text-gray-600 uppercase tracking-widest">Hemgjort Mjöd</p>
                                         </div>
                                         <div className="text-right">
                                             <div className="text-sm font-bold text-orange-600">{currentABV}%</div>
-                                            <div className="text-[8px] text-gray-500 uppercase">{sweetness}</div>
                                         </div>
                                     </div>
                                     
@@ -876,7 +897,7 @@
                                             <p className="text-[8px] text-gray-400">Buteljerad: {getBottlingDate()}</p>
                                         </div>
                                         <div className="w-12 h-12 bg-gray-50 flex items-center justify-center border border-gray-100">
-                                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin + window.location.pathname + '?batch=' + currentBatchId)}`} className="w-10 h-10 opacity-80" />
+                                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('https://johannespaulsson.github.io/honungsdryck/')}`} className="w-10 h-10 opacity-80" />
                                         </div>
                                     </div>
                                     
