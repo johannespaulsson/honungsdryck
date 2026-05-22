@@ -313,8 +313,10 @@
                     try {
                         const doc = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
                         if (doc.exists && doc.data().geminiApiKey) {
-                            setGeminiApiKey(doc.data().geminiApiKey);
-                            setApiKeyInput(doc.data().geminiApiKey);
+                            const dbKey = doc.data().geminiApiKey;
+                            setGeminiApiKey(dbKey);
+                            setApiKeyInput(dbKey);
+                            localStorage.setItem('mjod_gemini_api_key', dbKey); // Backup synk lokalt
                         }
                     } catch (e) {
                         console.error("Kunde inte hämta profil:", e);
@@ -464,16 +466,16 @@
             const handleSaveApiKey = async (key) => {
                 const trimmedKey = key.trim();
                 setGeminiApiKey(trimmedKey);
-                if (!user || isOffline || user.isAnonymous) {
-                    localStorage.setItem('mjod_gemini_api_key', trimmedKey);
-                } else {
+                // Spara alltid i localStorage som primärkälla och backup
+                localStorage.setItem('mjod_gemini_api_key', trimmedKey);
+                
+                if (user && !isOffline && !user.isAnonymous) {
                     try {
                         await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set({
                             geminiApiKey: trimmedKey
                         }, { merge: true });
                     } catch (e) {
                         console.error("Kunde inte spara API-nyckel i Firestore:", e);
-                        localStorage.setItem('mjod_gemini_api_key', trimmedKey);
                     }
                 }
                 setShowChatSettings(false);
@@ -1080,7 +1082,7 @@ Svara kortfattat och direkt (helst under 3-4 korta stycken). Använd gärna punk
                                     <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
                                         {chatMessages.map((msg, i) => (
                                             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-md ${msg.role === 'user' ? 'bg-orange-500 text-slate-950 font-medium rounded-tr-none' : 'bg-slate-800/80 border border-slate-750 text-slate-200 rounded-tl-none'}`} style={{whiteSpace: 'pre-line'}}>
+                                                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-md break-words whitespace-pre-wrap ${msg.role === 'user' ? 'bg-orange-500 text-slate-950 font-medium rounded-tr-none' : 'bg-slate-800/80 border border-slate-750 text-slate-200 rounded-tl-none'}`} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                                                     {msg.text}
                                                 </div>
                                             </div>
