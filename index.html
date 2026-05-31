@@ -166,6 +166,7 @@
 
             const fileInputRef = useRef(null);
             const batchMenuRef = useRef(null);
+            const chatEndRef = useRef(null);
 
             // --- HJÄLPFUNKTIONER ---
             const getCorrectedGravity = (g, t) => {
@@ -306,6 +307,13 @@
                     setApiKeyInput(localKey);
                 }
             }, []);
+
+            // Scrolla till slutet av chatten när meddelanden, laddningsstatus eller panelvisning ändras
+            useEffect(() => {
+                if (chatEndRef.current) {
+                    chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                }
+            }, [chatMessages, isChatLoading, showChatPanel]);
 
             // Ladda API-nyckel från Firestore när användaren loggar in
             useEffect(() => {
@@ -513,7 +521,7 @@
                 setIsChatLoading(true);
                 
                 try {
-                    const activeBatchText = currentBatchId ? `
+                    const activeBatchText = `
 - Namn: ${batchName || 'Namnlös'}
 - Startdatum: ${startDate} (${getDaysSince(startDate)} dagar sedan)
 - Honungssort: ${honeyType || 'Ej angivet'}
@@ -528,7 +536,7 @@
 - Sötma: ${getSweetnessStatus()}
 - Loggbok / Anteckningar:
 ${log || 'Inga anteckningar ännu.'}
-` : 'Ingen aktiv batch är laddad för tillfället.';
+`;
 
                     const systemInstruction = `Du är en expert på mjödbryggning och hembryggning (Mjödbryggning Pro AI).
 Du hjälper användaren med frågor om hembryggning och dess processer. Svara alltid professionellt, uppmuntrande och pedagogiskt på svenska.
@@ -1101,6 +1109,7 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                                                 </div>
                                             </div>
                                         )}
+                                        <div ref={chatEndRef} />
                                     </div>
 
                                     {/* Suggested questions */}
