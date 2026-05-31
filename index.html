@@ -548,15 +548,10 @@ ${activeBatchText}
 
 Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använd INTE komplex markdown utöver fetstil eller punktlistor.`;
 
-                    // För maximal kompatibilitet lägger vi instruktionerna i det första meddelandet
-                    const historyForGemini = newMessages.slice(-10).map((msg, index) => {
-                        let text = msg.text;
-                        if (index === 0 && msg.role === 'user') {
-                            text = `[SYSTEM-INSTRUKTIONER: ${systemInstruction}]\n\nAnvändarens fråga: ${text}`;
-                        }
+                    const historyForGemini = newMessages.slice(-10).map((msg) => {
                         return {
                             role: msg.role === 'user' ? 'user' : 'model',
-                            parts: [{ text }]
+                            parts: [{ text: msg.text }]
                         };
                     });
 
@@ -566,6 +561,9 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
+                            system_instruction: {
+                                parts: [{ text: systemInstruction }]
+                            },
                             contents: historyForGemini,
                             generationConfig: {
                                 maxOutputTokens: 1024,
