@@ -14,6 +14,13 @@
     
     <!-- 3. Hämta Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+        Babel.registerPreset("classic-react", {
+            presets: [
+                [Babel.availablePresets["react"], { runtime: "classic" }]
+            ]
+        });
+    </script>
 
     <!-- 4. Hämta Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -61,7 +68,7 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/babel" data-presets="classic-react">
         const { useState, useEffect, useRef } = React;
 
         // --- IKONER ---
