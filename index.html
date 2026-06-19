@@ -167,7 +167,7 @@
             const [log, setLog] = useState('');
             const [og, setOg] = useState(0);
             const [ogTemp, setOgTemp] = useState(20);
-            const [fg, setFg] = useState(0);
+            const [fg, setFg] = useState('');
             const [fgTemp, setFgTemp] = useState(20);
             const [savedBatches, setSavedBatches] = useState([]);
 
@@ -186,17 +186,20 @@
             const calculatePotentialABV = () => Math.max(0, getCorrectedGravity(og, ogTemp) / 7.5).toFixed(1);
             const calculateCurrentABV = () => {
                 const cOG = getCorrectedGravity(og, ogTemp);
+                if (fg === '' || fg === undefined || fg === null) return "0.0";
                 const cFG = getCorrectedGravity(fg, fgTemp);
                 if (cOG <= 0) return "0.0";
                 return Math.max(0, (cOG - cFG) / 7.5).toFixed(1);
             };
             const calculateAttenuation = () => {
                 const cOG = getCorrectedGravity(og, ogTemp);
+                if (fg === '' || fg === undefined || fg === null) return "0.0";
                 const cFG = getCorrectedGravity(fg, fgTemp);
                 if (cOG <= 0) return "0.0";
                 return Math.max(0, Math.min(100, ((cOG - cFG) / cOG) * 100)).toFixed(1);
             };
             const getSweetnessStatus = () => {
+                if (fg === '' || fg === undefined || fg === null) return "-";
                 const cFG = getCorrectedGravity(fg, fgTemp);
                 if (og == 0 && fg == 0) return "-";
                 if (cFG >= 45) return "Dessert / Mycket sött";
@@ -213,7 +216,8 @@
             };
 
             const calculateHoneyForSweetening = () => {
-                const diff = Math.max(0, parseFloat(sweetenTargetFg) - getCorrectedGravity(fg, fgTemp));
+                const currentFG = (fg === '' || fg === undefined || fg === null) ? og : fg;
+                const diff = Math.max(0, parseFloat(sweetenTargetFg) - getCorrectedGravity(currentFG, fgTemp));
                 return Math.round(diff * parseFloat(sweetenVolume) * 2.7);
             };
 
@@ -378,6 +382,10 @@
             const handleLogout = async () => { await auth.signOut(); auth.signInAnonymously().catch(() => setIsOffline(true)); };
 
             const handleAddLogEntry = () => {
+                if (fg === '' || fg === undefined || fg === null) {
+                    alert("Ange ett FG-värde först för att spara en mätning.");
+                    return;
+                }
                 const today = new Date().toISOString().split('T')[0].replace(/-/g, '/');
                 setLog(prev => prev + (prev.length > 0 && !prev.endsWith('\n') ? '\n' : '') + `- ${today}: ${fg} °Oe, ${calculateCurrentABV()}% ABV (${calculateAttenuation()}% utjäst)\n`);
             };
@@ -432,7 +440,7 @@
                 setWaterAmount(b.waterAmount || '');
                 setYeastType(b.yeastType || '');
                 setIngredients(b.ingredients || ''); setLog(b.log || ''); setOg(b.og || 0); setOgTemp(b.ogTemp || 20);
-                setFg(b.fg || 0); setFgTemp(b.fgTemp || 20); setNameError(false); setShowBatchMenu(false);
+                setFg(b.fg !== undefined && b.fg !== null ? b.fg : ''); setFgTemp(b.fgTemp || 20); setNameError(false); setShowBatchMenu(false);
             };
 
             const handleExportData = () => {
@@ -474,7 +482,7 @@
             const proceedToNewBatch = () => {
                 setCurrentBatchId(null); setBatchName(''); setStartDate(new Date().toISOString().split('T')[0]);
                 setHoneyType(''); setHoneyAmount(''); setWaterAmount(''); setYeastType('');
-                setIngredients(''); setLog(''); setOg(0); setOgTemp(20); setFg(0); setFgTemp(20);
+                setIngredients(''); setLog(''); setOg(0); setOgTemp(20); setFg(''); setFgTemp(20);
                 setNameError(false); setShowNewBatchConfirm(false); setShowBatchMenu(false);
             };
 
@@ -537,7 +545,7 @@
 - Jäst: ${yeastType || 'Ej angivet'}
 - Övriga ingredienser: ${ingredients || 'Inga'}
 - OG (Original Gravity): ${og} °Oe (Temp: ${ogTemp}°C)
-- FG (Final/Aktuell Gravity): ${fg} °Oe (Temp: ${fgTemp}°C)
+- FG (Final/Aktuell Gravity): ${fg !== '' ? fg + ' °Oe' : 'Ej mätt ännu'} (Temp: ${fgTemp}°C)
 - Alkoholhalt (ABV): ${calculateCurrentABV()}%
 - Utjäsning: ${calculateAttenuation()}%
 - Sötma: ${getSweetnessStatus()}
@@ -834,6 +842,7 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                                     <div className="grid grid-cols-3 gap-3">
                                         <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50"><label className="text-[10px] font-bold text-orange-400/70 uppercase mb-1 block">FG (°Oe)</label>
                                             <select value={fg} onChange={e => setFg(e.target.value)} className="w-full bg-transparent border-none text-sm text-orange-100 focus:outline-none cursor-pointer">
+                                                <option value="" className="bg-slate-900">Ej mätt</option>
                                                 {oechsleOptions.map(v => <option key={v} value={v} className="bg-slate-900">{v}</option>)}
                                             </select>
                                         </div>
