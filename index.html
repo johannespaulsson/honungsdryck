@@ -339,17 +339,24 @@
                 }
             }, [chatMessages, isChatLoading, showChatPanel]);
 
-            // Ladda API-nyckel från Firestore när användaren loggar in
+            // Ladda API-nyckel och tokenUsage från Firestore när användaren loggar in
             useEffect(() => {
                 if (!user || isOffline || user.isAnonymous) return;
                 const fetchProfile = async () => {
                     try {
                         const doc = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
-                        if (doc.exists && doc.data().geminiApiKey) {
-                            const dbKey = doc.data().geminiApiKey;
-                            setGeminiApiKey(dbKey);
-                            setApiKeyInput(dbKey);
-                            localStorage.setItem('mjod_gemini_api_key', dbKey); // Backup synk lokalt
+                        if (doc.exists) {
+                            const profileData = doc.data();
+                            if (profileData.geminiApiKey) {
+                                const dbKey = profileData.geminiApiKey;
+                                setGeminiApiKey(dbKey);
+                                setApiKeyInput(dbKey);
+                                localStorage.setItem('mjod_gemini_api_key', dbKey); // Backup synk lokalt
+                            }
+                            if (profileData.tokenUsage) {
+                                setTokenUsage(profileData.tokenUsage);
+                                localStorage.setItem('mjod_token_usage', JSON.stringify(profileData.tokenUsage)); // Backup synk lokalt
+                            }
                         }
                     } catch (e) {
                         console.error("Kunde inte hämta profil:", e);
@@ -620,6 +627,11 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                     if (data.usageMetadata) {
                         setTokenUsage(data.usageMetadata);
                         localStorage.setItem('mjod_token_usage', JSON.stringify(data.usageMetadata));
+                        if (user && !isOffline && !user.isAnonymous) {
+                            db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set({
+                                tokenUsage: data.usageMetadata
+                            }, { merge: true }).catch(e => console.error("Kunde inte spara tokens i Firestore:", e));
+                        }
                     }
                 } catch (e) {
                     console.error("AI Fel:", e);
