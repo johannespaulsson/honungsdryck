@@ -170,11 +170,15 @@
             const [fg, setFg] = useState('');
             const [fgTemp, setFgTemp] = useState(20);
             const [savedBatches, setSavedBatches] = useState([]);
-            const [tokenUsage, setTokenUsage] = useState(null);
+            const [tokenUsage, setTokenUsage] = useState(() => {
+                const saved = localStorage.getItem('mjod_token_usage');
+                return saved ? JSON.parse(saved) : null;
+            });
 
             const fileInputRef = useRef(null);
             const batchMenuRef = useRef(null);
             const chatEndRef = useRef(null);
+            const chatInputRef = useRef(null);
 
             // --- HJÄLPFUNKTIONER ---
             const getCorrectedGravity = (g, t) => {
@@ -319,6 +323,14 @@
                     setApiKeyInput(localKey);
                 }
             }, []);
+
+            // Auto-växande textruta för chatten
+            useEffect(() => {
+                if (chatInputRef.current) {
+                    chatInputRef.current.style.height = 'auto';
+                    chatInputRef.current.style.height = `${Math.min(100, chatInputRef.current.scrollHeight)}px`;
+                }
+            }, [chatInput]);
 
             // Scrolla till slutet av chatten när meddelanden, laddningsstatus eller panelvisning ändras
             useEffect(() => {
@@ -509,7 +521,9 @@
             const handleClearApiKey = async () => {
                 setGeminiApiKey('');
                 setApiKeyInput('');
+                setTokenUsage(null);
                 localStorage.removeItem('mjod_gemini_api_key');
+                localStorage.removeItem('mjod_token_usage');
                 if (user && !isOffline && !user.isAnonymous) {
                     try {
                         await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set({
@@ -518,6 +532,13 @@
                     } catch (e) {
                         console.error("Kunde inte ta bort API-nyckel från Firestore:", e);
                     }
+                }
+            };
+
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendChatMessage();
                 }
             };
 
@@ -598,6 +619,7 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                     setChatMessages(prev => [...prev, { role: 'assistant', text: aiText }]);
                     if (data.usageMetadata) {
                         setTokenUsage(data.usageMetadata);
+                        localStorage.setItem('mjod_token_usage', JSON.stringify(data.usageMetadata));
                     }
                 } catch (e) {
                     console.error("AI Fel:", e);
@@ -1159,7 +1181,17 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
 
                                     {/* Chat Input */}
                                     <div className="p-3 bg-slate-950/50 border-t border-slate-850 flex gap-2">
-                                        <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendChatMessage()} placeholder={geminiApiKey ? "Fråga AI:n..." : "Klicka på inställningar för att lägga till nyckel..."} disabled={!geminiApiKey || isChatLoading} className="flex-1 bg-slate-900 border border-slate-700/60 rounded-xl px-3 py-2 text-xs text-orange-100 focus:outline-none focus:border-orange-500/50 placeholder-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"/>
+                                        <textarea
+                                            ref={chatInputRef}
+                                            rows="1"
+                                            value={chatInput}
+                                            onChange={e => setChatInput(e.target.value)}
+                                            onKeyDown={handleKeyDown}
+                                            placeholder={geminiApiKey ? "Fråga AI:n..." : "Klicka på inställningar för att lägga till nyckel..."}
+                                            disabled={!geminiApiKey || isChatLoading}
+                                            className="flex-1 bg-slate-900 border border-slate-700/60 rounded-xl px-3 py-2 text-xs text-orange-100 focus:outline-none focus:border-orange-500/50 placeholder-slate-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none custom-scrollbar py-2 overflow-y-auto"
+                                            style={{ maxHeight: '100px' }}
+                                        />
                                         <button onClick={() => handleSendChatMessage()} disabled={!geminiApiKey || isChatLoading || !chatInput.trim()} className="bg-orange-500 hover:bg-orange-400 disabled:bg-slate-800 text-slate-950 disabled:text-slate-600 p-2 rounded-xl active:scale-95 transition-all duration-150 flex items-center justify-center disabled:scale-100 disabled:cursor-not-allowed">
                                             <Icon name="Send" size={16}/>
                                         </button>
