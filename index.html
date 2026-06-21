@@ -1130,6 +1130,12 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                                         <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 font-bold underline">
                                             Hämta din gratis API-nyckel här (Google AI Studio) <Icon name="Plus" size={12}/>
                                         </a>
+                                        <div className="pt-1 text-[11px] text-slate-400 leading-normal">
+                                            <span>Vill du se din faktiska anropshistorik och kvotgräns? </span>
+                                            <a href="https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">
+                                                Gå till Google Cloud API Quotas
+                                            </a>.
+                                        </div>
                                         <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 space-y-2">
                                             <label className="text-[10px] font-bold text-slate-400 uppercase">Gemini API-nyckel</label>
                                             <input type="password" value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)} placeholder="AIzaSy..." className="w-full bg-slate-900 border border-slate-700/60 rounded px-2.5 py-1.5 text-xs text-orange-100 focus:outline-none focus:border-orange-500/50 font-mono"/>
