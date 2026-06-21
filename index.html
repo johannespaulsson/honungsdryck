@@ -170,10 +170,6 @@
             const [fg, setFg] = useState('');
             const [fgTemp, setFgTemp] = useState(20);
             const [savedBatches, setSavedBatches] = useState([]);
-            const [tokenUsage, setTokenUsage] = useState(() => {
-                const saved = localStorage.getItem('mjod_token_usage');
-                return saved ? JSON.parse(saved) : null;
-            });
 
             const fileInputRef = useRef(null);
             const batchMenuRef = useRef(null);
@@ -339,24 +335,17 @@
                 }
             }, [chatMessages, isChatLoading, showChatPanel]);
 
-            // Ladda API-nyckel och tokenUsage från Firestore när användaren loggar in
+            // Ladda API-nyckel från Firestore när användaren loggar in
             useEffect(() => {
                 if (!user || isOffline || user.isAnonymous) return;
                 const fetchProfile = async () => {
                     try {
                         const doc = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).get();
-                        if (doc.exists) {
-                            const profileData = doc.data();
-                            if (profileData.geminiApiKey) {
-                                const dbKey = profileData.geminiApiKey;
-                                setGeminiApiKey(dbKey);
-                                setApiKeyInput(dbKey);
-                                localStorage.setItem('mjod_gemini_api_key', dbKey); // Backup synk lokalt
-                            }
-                            if (profileData.tokenUsage) {
-                                setTokenUsage(profileData.tokenUsage);
-                                localStorage.setItem('mjod_token_usage', JSON.stringify(profileData.tokenUsage)); // Backup synk lokalt
-                            }
+                        if (doc.exists && doc.data().geminiApiKey) {
+                            const dbKey = doc.data().geminiApiKey;
+                            setGeminiApiKey(dbKey);
+                            setApiKeyInput(dbKey);
+                            localStorage.setItem('mjod_gemini_api_key', dbKey); // Backup synk lokalt
                         }
                     } catch (e) {
                         console.error("Kunde inte hämta profil:", e);
@@ -528,9 +517,7 @@
             const handleClearApiKey = async () => {
                 setGeminiApiKey('');
                 setApiKeyInput('');
-                setTokenUsage(null);
                 localStorage.removeItem('mjod_gemini_api_key');
-                localStorage.removeItem('mjod_token_usage');
                 if (user && !isOffline && !user.isAnonymous) {
                     try {
                         await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set({
@@ -624,15 +611,8 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                     const data = await response.json();
                     const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Hittade inget svar. Försök igen.";
                     setChatMessages(prev => [...prev, { role: 'assistant', text: aiText }]);
-                    if (data.usageMetadata) {
-                        setTokenUsage(data.usageMetadata);
-                        localStorage.setItem('mjod_token_usage', JSON.stringify(data.usageMetadata));
-                        if (user && !isOffline && !user.isAnonymous) {
-                            db.collection('artifacts').doc(appId).collection('users').doc(user.uid).set({
-                                tokenUsage: data.usageMetadata
-                            }, { merge: true }).catch(e => console.error("Kunde inte spara tokens i Firestore:", e));
-                        }
-                    }
+                    // Svaret sparas
+
                 } catch (e) {
                     console.error("AI Fel:", e);
                     setChatMessages(prev => [...prev, { role: 'assistant', text: `Hoppsan, något gick fel vid anropet till AI:n: ${e.message}. Kontrollera din internetanslutning och API-nyckel.` }]);
@@ -1176,24 +1156,6 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                                             <button onClick={() => handleSendChatMessage('Är det normalt att min jäsning går så här långsamt?')} className="bg-slate-950/40 hover:bg-slate-800 text-[10px] text-amber-400 border border-slate-800 rounded-full px-3 py-1.5 transition-colors">Långsam jäsning?</button>
                                             <button onClick={() => handleSendChatMessage('När är det dags att tappa om mitt mjöd?')} className="bg-slate-950/40 hover:bg-slate-800 text-[10px] text-amber-400 border border-slate-800 rounded-full px-3 py-1.5 transition-colors">Tappa om?</button>
                                             <button onClick={() => handleSendChatMessage('Hur ökar jag alkoholhalten eller eftersötar säkert?')} className="bg-slate-950/40 hover:bg-slate-800 text-[10px] text-amber-400 border border-slate-800 rounded-full px-3 py-1.5 transition-colors">Sötning & Alkohol</button>
-                                        </div>
-                                    )}
-
-                                    {/* Token usage indicator */}
-                                    {tokenUsage && (
-                                        <div className="px-4 py-2 bg-slate-950/20 border-t border-slate-850/50 flex flex-col gap-1 text-[10px] text-slate-400 font-mono select-none">
-                                            <div className="flex justify-between items-center">
-                                                <span className="flex items-center gap-1.5">
-                                                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
-                                                    Senaste anrop: {tokenUsage.totalTokenCount.toLocaleString('sv-SE')} tokens
-                                                </span>
-                                                <span className="text-slate-500">
-                                                    {((tokenUsage.totalTokenCount / 1048576) * 100).toFixed(4)}% av gräns
-                                                </span>
-                                            </div>
-                                            <div className="h-1 bg-slate-800 rounded-full overflow-hidden w-full" title={`Senaste anrop tog upp ${((tokenUsage.totalTokenCount / 1048576) * 100).toFixed(4)}% av modellens kontextfönster på 1 048 576 tokens.`}>
-                                                <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-700 ease-out" style={{ width: `${Math.min(100, Math.max(1, (tokenUsage.totalTokenCount / 1048576) * 100))}%` }}></div>
-                                            </div>
                                         </div>
                                     )}
 
