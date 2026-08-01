@@ -435,71 +435,87 @@
             };
 
             const renderStampedLabelCanvas = (imageSrc, isBw, bName, abvVal, hType, bDate, bId) => {
-                return new Promise((resolve, reject) => {
+                return new Promise((resolve) => {
+                    const timeout = setTimeout(() => {
+                        resolve(imageSrc);
+                    }, 5000);
+
                     const img = new window.Image();
-                    img.crossOrigin = "anonymous";
+                    if (typeof imageSrc === 'string' && imageSrc.startsWith('http')) {
+                        img.crossOrigin = "anonymous";
+                    }
                     img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const size = 1000;
-                        canvas.width = size;
-                        canvas.height = size;
-                        const ctx = canvas.getContext('2d');
+                        clearTimeout(timeout);
+                        try {
+                            const canvas = document.createElement('canvas');
+                            const size = 1000;
+                            canvas.width = size;
+                            canvas.height = size;
+                            const ctx = canvas.getContext('2d');
 
-                        let srcW = img.width;
-                        let srcH = img.height;
-                        let minDim = Math.min(srcW, srcH);
-                        let srcX = (srcW - minDim) / 2;
-                        let srcY = (srcH - minDim) / 2;
+                            let srcW = img.width;
+                            let srcH = img.height;
+                            let minDim = Math.min(srcW, srcH);
+                            let srcX = (srcW - minDim) / 2;
+                            let srcY = (srcH - minDim) / 2;
 
-                        if (isBw) {
-                            ctx.filter = 'grayscale(100%) contrast(120%)';
+                            if (isBw) {
+                                ctx.filter = 'grayscale(100%) contrast(120%)';
+                            }
+                            ctx.drawImage(img, srcX, srcY, minDim, minDim, 0, 0, size, size);
+                            ctx.filter = 'none';
+
+                            const bannerHeight = 220;
+                            const bannerY = size - bannerHeight;
+
+                            const grad = ctx.createLinearGradient(0, bannerY - 30, 0, size);
+                            if (isBw) {
+                                grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+                                grad.addColorStop(0.3, 'rgba(0, 0, 0, 0.85)');
+                                grad.addColorStop(1, 'rgba(0, 0, 0, 0.98)');
+                            } else {
+                                grad.addColorStop(0, 'rgba(15, 23, 42, 0)');
+                                grad.addColorStop(0.3, 'rgba(15, 23, 42, 0.85)');
+                                grad.addColorStop(1, 'rgba(15, 23, 42, 0.98)');
+                            }
+                            ctx.fillStyle = grad;
+                            ctx.fillRect(0, bannerY - 30, size, bannerHeight + 30);
+
+                            ctx.fillStyle = isBw ? '#ffffff' : '#fb923c';
+                            ctx.fillRect(40, bannerY - 5, size - 80, 3);
+
+                            ctx.fillStyle = '#ffffff';
+                            ctx.font = 'bold 44px sans-serif';
+                            ctx.textAlign = 'left';
+                            ctx.textBaseline = 'top';
+                            ctx.fillText(bName || 'Mjöd', 50, bannerY + 15);
+
+                            ctx.fillStyle = isBw ? '#cccccc' : '#fdba74';
+                            ctx.font = '500 24px sans-serif';
+                            const subText = [hType, 'Hantverksmjöd'].filter(Boolean).join(' • ');
+                            ctx.fillText(subText, 50, bannerY + 70);
+
+                            ctx.fillStyle = '#94a3b8';
+                            ctx.font = '20px monospace';
+                            ctx.fillText(`Batch #${(bId || '0000').slice(-4)} | ${bDate || ''}`, 50, bannerY + 115);
+
+                            const abvText = `${abvVal || '0.0'}% ABV`;
+                            ctx.fillStyle = isBw ? '#ffffff' : '#fb923c';
+                            ctx.font = 'bold 48px sans-serif';
+                            ctx.textAlign = 'right';
+                            ctx.fillText(abvText, size - 50, bannerY + 25);
+
+                            resolve(canvas.toDataURL('image/jpeg', 0.9));
+                        } catch (err) {
+                            console.warn("Canvas-stämpling misslyckades, använder ursprungsbild:", err);
+                            resolve(imageSrc);
                         }
-                        ctx.drawImage(img, srcX, srcY, minDim, minDim, 0, 0, size, size);
-                        ctx.filter = 'none';
-
-                        const bannerHeight = 220;
-                        const bannerY = size - bannerHeight;
-
-                        const grad = ctx.createLinearGradient(0, bannerY - 30, 0, size);
-                        if (isBw) {
-                            grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-                            grad.addColorStop(0.3, 'rgba(0, 0, 0, 0.85)');
-                            grad.addColorStop(1, 'rgba(0, 0, 0, 0.98)');
-                        } else {
-                            grad.addColorStop(0, 'rgba(15, 23, 42, 0)');
-                            grad.addColorStop(0.3, 'rgba(15, 23, 42, 0.85)');
-                            grad.addColorStop(1, 'rgba(15, 23, 42, 0.98)');
-                        }
-                        ctx.fillStyle = grad;
-                        ctx.fillRect(0, bannerY - 30, size, bannerHeight + 30);
-
-                        ctx.fillStyle = isBw ? '#ffffff' : '#fb923c';
-                        ctx.fillRect(40, bannerY - 5, size - 80, 3);
-
-                        ctx.fillStyle = '#ffffff';
-                        ctx.font = 'bold 44px sans-serif';
-                        ctx.textAlign = 'left';
-                        ctx.textBaseline = 'top';
-                        ctx.fillText(bName || 'Mjöd', 50, bannerY + 15);
-
-                        ctx.fillStyle = isBw ? '#cccccc' : '#fdba74';
-                        ctx.font = '500 24px sans-serif';
-                        const subText = [hType, 'Hantverksmjöd'].filter(Boolean).join(' • ');
-                        ctx.fillText(subText, 50, bannerY + 70);
-
-                        ctx.fillStyle = '#94a3b8';
-                        ctx.font = '20px monospace';
-                        ctx.fillText(`Batch #${(bId || '0000').slice(-4)} | ${bDate || ''}`, 50, bannerY + 115);
-
-                        const abvText = `${abvVal || '0.0'}% ABV`;
-                        ctx.fillStyle = isBw ? '#ffffff' : '#fb923c';
-                        ctx.font = 'bold 48px sans-serif';
-                        ctx.textAlign = 'right';
-                        ctx.fillText(abvText, size - 50, bannerY + 25);
-
-                        resolve(canvas.toDataURL('image/jpeg', 0.9));
                     };
-                    img.onerror = reject;
+                    img.onerror = () => {
+                        clearTimeout(timeout);
+                        console.warn("Kunde inte ladda bild för stämpling, använder ursprungsbild");
+                        resolve(imageSrc);
+                    };
                     img.src = imageSrc;
                 });
             };
@@ -604,25 +620,10 @@
                 if (!file) return;
                 setIsUploadingImage(true);
                 try {
-                    let uploadedUrl = '';
-                    if (user && !isOffline && !user.isAnonymous && firebase.storage) {
-                        try {
-                            const batchId = currentBatchId || Date.now().toString();
-                            if (!currentBatchId) setCurrentBatchId(batchId);
-                            const storageRef = firebase.storage().ref();
-                            const fileRef = storageRef.child(`artifacts/${appId}/users/${user.uid}/batches/${batchId}/label_${Date.now()}_${file.name}`);
-                            const snapshot = await fileRef.put(file);
-                            uploadedUrl = await snapshot.ref.getDownloadURL();
-                        } catch (storageErr) {
-                            console.warn("Firebase Storage misslyckades. Sparar komprimerad bild i databasen istället.", storageErr);
-                        }
-                    }
-                    if (!uploadedUrl) {
-                        uploadedUrl = await compressImageToDataUrl(file, 1600, 0.85);
-                    }
+                    const rawDataUrl = await compressImageToDataUrl(file, 1600, 0.85);
 
                     const finalStamped = await renderStampedLabelCanvas(
-                        uploadedUrl,
+                        rawDataUrl,
                         isGrayscale,
                         batchName,
                         calculateCurrentABV(),
@@ -632,8 +633,8 @@
                     );
                     setLabelImage(finalStamped);
                 } catch (err) {
-                    alert("Kunde inte läsa bildfilen.");
-                    console.error(err);
+                    alert("Kunde inte behandla bildfilen: " + (err.message || err));
+                    console.error("Label upload error:", err);
                 } finally {
                     setIsUploadingImage(false);
                     if (e.target) e.target.value = '';
