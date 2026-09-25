@@ -105,6 +105,7 @@
                 Wrench: <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
                 Archive: <><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></>,
                 Plus: <path d="M5 12h14M12 5v14"/>,
+                Minus: <path d="M5 12h14"/>,
                 Save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>,
                 Activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>,
                 Trash2: <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/>,
@@ -196,6 +197,7 @@
             const [isUploadingImage, setIsUploadingImage] = useState(false);
             const [isGrayscale, setIsGrayscale] = useState(false);
             const [showImageModal, setShowImageModal] = useState(false);
+            const [showLabels, setShowLabels] = useState(false);
             const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
             const [honeyType, setHoneyType] = useState('');
             const [honeyAmount, setHoneyAmount] = useState('');
@@ -936,160 +938,195 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                                         </div>
                                     </div>
 
-                                    {/* ETIKETTER: FRAMSIDA & BAKSIDA */}
-                                    <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50 space-y-3">
-                                        <div className="flex flex-wrap justify-between items-center border-b border-slate-800 pb-2 gap-2">
+                                    {/* ETIKETTER: FRAMSIDA & BAKSIDA (KOLLAPSBAR) */}
+                                    <div className="bg-slate-900/50 rounded-lg border border-slate-700/50 overflow-hidden transition-all">
+                                        <div 
+                                            onClick={() => setShowLabels(!showLabels)}
+                                            className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 transition-colors select-none"
+                                        >
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] font-bold text-orange-400/70 uppercase tracking-wider">Etiketter: Framsida & Baksida</span>
-                                                <div className="flex items-center bg-slate-950 p-0.5 rounded border border-slate-800 text-[10px]">
-                                                    <button
-                                                        onClick={() => setBottleSize('75cl')}
-                                                        className={`px-2 py-0.5 rounded transition-all font-medium ${bottleSize === '75cl' ? 'bg-orange-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                                                    >
-                                                        75 cl (Standard)
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setBottleSize('37cl')}
-                                                        className={`px-2 py-0.5 rounded transition-all font-medium ${bottleSize === '37cl' ? 'bg-orange-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                                                    >
-                                                        37,5 cl
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-slate-300 hover:text-orange-300 font-medium select-none">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isGrayscale}
-                                                        onChange={e => setIsGrayscale(e.target.checked)}
-                                                        className="accent-orange-500 rounded cursor-pointer"
-                                                    />
-                                                    <span>Svartvit utskrift (B&W)</span>
-                                                </label>
                                                 {labelImage && (
-                                                    <button
-                                                        onClick={() => setLabelImage('')}
-                                                        className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors font-medium"
-                                                        title="Ta bort bilden helt"
-                                                    >
-                                                        <Icon name="Trash2" size={12}/> Ta bort bild
-                                                    </button>
+                                                    <span className="text-[9px] bg-orange-500/20 text-orange-300 px-1.5 py-0.5 rounded font-medium">Bild vald</span>
                                                 )}
                                             </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    {showLabels ? "Dölj" : "Visa"}
+                                                </span>
+                                                <button 
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); setShowLabels(!showLabels); }}
+                                                    className="w-5 h-5 rounded flex items-center justify-center bg-slate-800 text-orange-400 hover:bg-orange-500 hover:text-slate-950 transition-colors"
+                                                    title={showLabels ? "Dölj etiketter" : "Visa etiketter"}
+                                                >
+                                                    <Icon name={showLabels ? "Minus" : "Plus"} size={13} />
+                                                </button>
+                                            </div>
                                         </div>
 
-                                        <input
-                                            type="file"
-                                            ref={labelFileInputRef}
-                                            onChange={handleLabelImageChange}
-                                            accept="image/*"
-                                            className="hidden"
-                                        />
-
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-                                            {/* FRAMSIDA (BILD) */}
-                                            <div className="space-y-1.5">
-                                                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
-                                                    <span>Framsida (Bild)</span>
-                                                    <span className="text-slate-500 font-mono">{bottleSize === '75cl' ? '90 × 120 mm' : '75 × 100 mm'}</span>
+                                        {showLabels && (
+                                            <div className="p-4 pt-2 border-t border-slate-800 space-y-3">
+                                                <div className="flex flex-wrap justify-between items-center border-b border-slate-800 pb-2 gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex items-center bg-slate-950 p-0.5 rounded border border-slate-800 text-[10px]">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setBottleSize('75cl')}
+                                                                className={`px-2 py-0.5 rounded transition-all font-medium ${bottleSize === '75cl' ? 'bg-orange-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                                                            >
+                                                                75 cl (Standard)
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setBottleSize('37cl')}
+                                                                className={`px-2 py-0.5 rounded transition-all font-medium ${bottleSize === '37cl' ? 'bg-orange-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                                                            >
+                                                                37,5 cl
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-slate-300 hover:text-orange-300 font-medium select-none">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isGrayscale}
+                                                                onChange={e => setIsGrayscale(e.target.checked)}
+                                                                className="accent-orange-500 rounded cursor-pointer"
+                                                            />
+                                                            <span>Svartvit utskrift (B&W)</span>
+                                                        </label>
+                                                        {labelImage && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setLabelImage('')}
+                                                                className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors font-medium"
+                                                                title="Ta bort bilden helt"
+                                                            >
+                                                                <Icon name="Trash2" size={12}/> Ta bort bild
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                
-                                                <div className="relative group rounded-lg overflow-hidden border border-slate-700 bg-slate-950 aspect-[3/4] flex items-center justify-center p-2 shadow-inner">
-                                                    {labelImage ? (
-                                                        <>
-                                                            <img src={labelImage} alt="Framsida" className={`w-full h-full object-contain rounded ${isGrayscale ? 'filter grayscale contrast-125' : ''}`} />
-                                                            
-                                                            {/* Hover Overlay */}
-                                                            <div className="absolute inset-0 bg-slate-950/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-xs">
-                                                                <button
-                                                                    onClick={() => setShowImageModal(true)}
-                                                                    className="bg-slate-800 hover:bg-slate-700 text-slate-100 p-2.5 rounded-lg border border-slate-600 transition-colors shadow"
-                                                                    title="Visa i helskärm"
-                                                                >
-                                                                    <Icon name="Maximize" size={18} />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => labelFileInputRef.current && labelFileInputRef.current.click()}
-                                                                    className="bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold p-2.5 rounded-lg transition-colors shadow"
-                                                                    title="Byt bild"
-                                                                >
-                                                                    <Icon name="Upload" size={18} />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setLabelImage('')}
-                                                                    className="bg-red-950/80 hover:bg-red-900 text-red-400 p-2.5 rounded-lg border border-red-800 transition-colors shadow"
-                                                                    title="Ta bort bilden helt"
-                                                                >
-                                                                    <Icon name="Trash2" size={18} />
-                                                                </button>
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => labelFileInputRef.current && labelFileInputRef.current.click()}
-                                                            disabled={isUploadingImage}
-                                                            className="w-full h-full border-2 border-dashed border-slate-800 hover:border-orange-500/50 rounded flex flex-col items-center justify-center p-4 text-center transition-all bg-slate-950/40 hover:bg-slate-900/40 group cursor-pointer"
-                                                        >
-                                                            {isUploadingImage ? (
-                                                                <span className="text-xs text-orange-400 animate-pulse">Laddar upp bild...</span>
-                                                            ) : (
+
+                                                <input
+                                                    type="file"
+                                                    ref={labelFileInputRef}
+                                                    onChange={handleLabelImageChange}
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                />
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                                                    {/* FRAMSIDA (BILD) */}
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
+                                                            <span>Framsida (Bild)</span>
+                                                            <span className="text-slate-500 font-mono">{bottleSize === '75cl' ? '90 × 120 mm' : '75 × 100 mm'}</span>
+                                                        </div>
+                                                        
+                                                        <div className="relative group rounded-lg overflow-hidden border border-slate-700 bg-slate-950 aspect-[3/4] flex items-center justify-center p-2 shadow-inner">
+                                                            {labelImage ? (
                                                                 <>
-                                                                    <Icon name="Image" size={28} className="text-slate-600 group-hover:text-orange-400 transition-colors mb-2" />
-                                                                    <span className="text-xs font-bold text-slate-300 group-hover:text-orange-300">Ladda upp framsida</span>
-                                                                    <span className="text-[9px] text-slate-500 mt-1">Stående bild (JPG/PNG)</span>
+                                                                    <img src={labelImage} alt="Framsida" className={`w-full h-full object-contain rounded ${isGrayscale ? 'filter grayscale contrast-125' : ''}`} />
+                                                                    
+                                                                    {/* Hover Overlay */}
+                                                                    <div className="absolute inset-0 bg-slate-950/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-xs">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setShowImageModal(true)}
+                                                                            className="bg-slate-800 hover:bg-slate-700 text-slate-100 p-2.5 rounded-lg border border-slate-600 transition-colors shadow"
+                                                                            title="Visa i helskärm"
+                                                                        >
+                                                                            <Icon name="Maximize" size={18} />
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => labelFileInputRef.current && labelFileInputRef.current.click()}
+                                                                            className="bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold p-2.5 rounded-lg transition-colors shadow"
+                                                                            title="Byt bild"
+                                                                        >
+                                                                            <Icon name="Upload" size={18} />
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setLabelImage('')}
+                                                                            className="bg-red-950/80 hover:bg-red-900 text-red-400 p-2.5 rounded-lg border border-red-800 transition-colors shadow"
+                                                                            title="Ta bort bilden helt"
+                                                                        >
+                                                                            <Icon name="Trash2" size={18} />
+                                                                        </button>
+                                                                    </div>
                                                                 </>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => labelFileInputRef.current && labelFileInputRef.current.click()}
+                                                                    disabled={isUploadingImage}
+                                                                    className="w-full h-full border-2 border-dashed border-slate-800 hover:border-orange-500/50 rounded flex flex-col items-center justify-center p-4 text-center transition-all bg-slate-950/40 hover:bg-slate-900/40 group cursor-pointer"
+                                                                >
+                                                                    {isUploadingImage ? (
+                                                                        <span className="text-xs text-orange-400 animate-pulse">Laddar upp bild...</span>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Icon name="Image" size={28} className="text-slate-600 group-hover:text-orange-400 transition-colors mb-2" />
+                                                                            <span className="text-xs font-bold text-slate-300 group-hover:text-orange-300">Ladda upp framsida</span>
+                                                                            <span className="text-[9px] text-slate-500 mt-1">Stående bild (JPG/PNG)</span>
+                                                                        </>
+                                                                    )}
+                                                                </button>
                                                             )}
-                                                        </button>
-                                                    )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* BAKSIDA (FAKTA, INGREDIENSER & QR-KOD) */}
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
+                                                            <span>Baksida (Ingredienser & QR)</span>
+                                                            <span className="text-slate-500 font-mono">{bottleSize === '75cl' ? '90 × 60 mm' : '75 × 50 mm'}</span>
+                                                        </div>
+
+                                                        <div className="bg-white text-slate-900 rounded-lg p-3 text-left border border-slate-300 shadow relative overflow-hidden flex flex-col justify-between aspect-[3/2] select-none">
+                                                            <div className="flex justify-between items-start">
+                                                                <div>
+                                                                    <h4 className="text-xs font-bold leading-tight text-slate-900">{batchName || "Namnlös Brygd"}</h4>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <span className="text-xs font-bold text-orange-600 font-mono">{calculateCurrentABV()}%</span>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <div className="flex-1 my-1 border-y border-slate-200 py-1 overflow-hidden">
+                                                                <p className="text-[7px] text-slate-500 uppercase font-bold">Ingredienser</p>
+                                                                <p className="text-[8px] leading-tight text-slate-700 italic">
+                                                                    {[
+                                                                        honeyType ? `${honeyAmount || '0'}g ${honeyType}` : null,
+                                                                        yeastType || null,
+                                                                        ingredients ? ingredients.split('\n').filter(line => line.trim()).join(', ') : null
+                                                                    ].filter(Boolean).join(', ')}
+                                                                    {!honeyType && !yeastType && !ingredients && "Honung, vatten, jäst"}
+                                                                </p>
+                                                            </div>
+
+                                                            <div className="flex justify-between items-end pt-1">
+                                                                <div className="space-y-0.5">
+                                                                    <p className="text-[7px] text-slate-500">Batch #{currentBatchId?.slice(-4) || "0000"}</p>
+                                                                    <p className="text-[7px] text-slate-500">Startad: {startDate.replace(/-/g, '/')}</p>
+                                                                    <p className="text-[7px] text-slate-500">Buteljerad: {getBottlingDate()}</p>
+                                                                </div>
+                                                                <div className="w-8 h-8 bg-slate-50 flex items-center justify-center border border-slate-200 rounded">
+                                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('https://johannespaulsson.github.io/honungsdryck/')}`} className="w-7 h-7 opacity-80" alt="QR" />
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="absolute -top-2 -right-2 opacity-5 scale-125 rotate-12 pointer-events-none text-slate-900">
+                                                                <Icon name="Archive" size={60}/>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-
-                                            {/* BAKSIDA (FAKTA, INGREDIENSER & QR-KOD) */}
-                                            <div className="space-y-1.5">
-                                                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
-                                                    <span>Baksida (Ingredienser & QR)</span>
-                                                    <span className="text-slate-500 font-mono">{bottleSize === '75cl' ? '90 × 60 mm' : '75 × 50 mm'}</span>
-                                                </div>
-
-                                                <div className="bg-white text-slate-900 rounded-lg p-3 text-left border border-slate-300 shadow relative overflow-hidden flex flex-col justify-between aspect-[3/2] select-none">
-                                                    <div className="flex justify-between items-start">
-                                                        <div>
-                                                            <h4 className="text-xs font-bold leading-tight text-slate-900">{batchName || "Namnlös Brygd"}</h4>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <span className="text-xs font-bold text-orange-600 font-mono">{calculateCurrentABV()}%</span>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div className="flex-1 my-1 border-y border-slate-200 py-1 overflow-hidden">
-                                                        <p className="text-[7px] text-slate-500 uppercase font-bold">Ingredienser</p>
-                                                        <p className="text-[8px] leading-tight text-slate-700 italic">
-                                                            {[
-                                                                honeyType ? `${honeyAmount || '0'}g ${honeyType}` : null,
-                                                                yeastType || null,
-                                                                ingredients ? ingredients.split('\n').filter(line => line.trim()).join(', ') : null
-                                                            ].filter(Boolean).join(', ')}
-                                                            {!honeyType && !yeastType && !ingredients && "Honung, vatten, jäst"}
-                                                        </p>
-                                                    </div>
-
-                                                    <div className="flex justify-between items-end pt-1">
-                                                        <div className="space-y-0.5">
-                                                            <p className="text-[7px] text-slate-500">Batch #{currentBatchId?.slice(-4) || "0000"}</p>
-                                                            <p className="text-[7px] text-slate-500">Startad: {startDate.replace(/-/g, '/')}</p>
-                                                            <p className="text-[7px] text-slate-500">Buteljerad: {getBottlingDate()}</p>
-                                                        </div>
-                                                        <div className="w-8 h-8 bg-slate-50 flex items-center justify-center border border-slate-200 rounded">
-                                                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('https://johannespaulsson.github.io/honungsdryck/')}`} className="w-7 h-7 opacity-80" alt="QR" />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="absolute -top-2 -right-2 opacity-5 scale-125 rotate-12 pointer-events-none text-slate-900">
-                                                        <Icon name="Archive" size={60}/>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div className="space-y-4">
