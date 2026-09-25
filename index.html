@@ -671,43 +671,89 @@ ${activeBatchText}
 
 Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använd INTE komplex markdown utöver fetstil eller punktlistor.`;
 
-                    const historyForGemini = newMessages.slice(-10).map((msg) => {
-                        return {
-                            role: msg.role === 'user' ? 'user' : 'model',
-                            parts: [{ text: msg.text }]
-                        };
-                    });
+                    // Gemini API kräver att första meddelandet i contents är 'user'
+                    let rawHistory = newMessages.slice(-10).map((msg) => ({
+                        role: msg.role === 'user' ? 'user' : 'model',
+                        parts: [{ text: msg.text }]
+                    }));
 
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            system_instruction: {
-                                parts: [{ text: systemInstruction }]
-                            },
-                            contents: historyForGemini,
-                            generationConfig: {
-                                maxOutputTokens: 4096,
-                                temperature: 0.7
-                            }
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const errData = await response.json();
-                        throw new Error(errData.error?.message || `HTTP fel ${response.status}`);
+                    while (rawHistory.length > 0 && rawHistory[0].role !== 'user') {
+                        rawHistory.shift();
                     }
 
-                    const data = await response.json();
-                    const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Hittade inget svar. Försök igen.";
+                    if (rawHistory.length === 0) {
+                        rawHistory = [{ role: 'user', parts: [{ text: textToSend }] }];
+                    }
+
+                    // Sammanfoga eventuella intilliggande meddelanden med samma roll
+                    const mergedHistory = [];
+                    for (const msg of rawHistory) {
+                        if (mergedHistory.length > 0 && mergedHistory[mergedHistory.length - 1].role === msg.role) {
+                            mergedHistory[mergedHistory.length - 1].parts[0].text += "\n" + msg.parts[0].text;
+                        } else {
+                            mergedHistory.push({ role: msg.role, parts: [{ text: msg.parts[0].text }] });
+                        }
+                    }
+
+                    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+                    let lastError = null;
+                    let successData = null;
+
+                    for (const model of modelsToTry) {
+                        try {
+                            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    system_instruction: {
+                                        parts: [{ text: systemInstruction }]
+                                    },
+                                    contents: mergedHistory,
+                                    generationConfig: {
+                                        maxOutputTokens: 4096,
+                                        temperature: 0.7
+                                    }
+                                })
+                            });
+
+                            if (!response.ok) {
+                                const errData = await response.json().catch(() => ({}));
+                                const errMsg = errData.error?.message || `HTTP ${response.status}`;
+                                if (response.status === 404 || errMsg.includes('not found')) {
+                                    lastError = new Error(errMsg);
+                                    continue; // Prova nästa modell
+                                }
+                                throw new Error(errMsg);
+                            }
+
+                            successData = await response.json();
+                            break; // Lyckades!
+                        } catch (err) {
+                            lastError = err;
+                            if (err.message && !err.message.includes('not found') && !err.message.includes('404')) {
+                                throw err;
+                            }
+                        }
+                    }
+
+                    if (!successData && lastError) {
+                        throw lastError;
+                    }
+
+                    const aiText = successData?.candidates?.[0]?.content?.parts?.[0]?.text || "Hittade inget svar. Försök igen.";
                     setChatMessages(prev => [...prev, { role: 'assistant', text: aiText }]);
-                    // Svaret sparas
 
                 } catch (e) {
                     console.error("AI Fel:", e);
-                    setChatMessages(prev => [...prev, { role: 'assistant', text: `Hoppsan, något gick fel vid anropet till AI:n: ${e.message}. Kontrollera din internetanslutning och API-nyckel.` }]);
+                    let userFriendlyMsg = `Hoppsan, något gick fel vid anropet till AI:n (${e.message}).`;
+                    if (e.message.includes('API_KEY_INVALID') || e.message.includes('key not valid') || e.message.includes('400')) {
+                        userFriendlyMsg = `Ogiltig API-nyckel. Kontrollera din nyckel under inställningarna (klicka på skiftnyckeln 🔧 i chatten).`;
+                    } else if (e.message.includes('RESOURCE_EXHAUSTED') || e.message.includes('429')) {
+                        userFriendlyMsg = `Kvotgränsen har nåtts för din API-nyckel hos Google. Försök igen om en liten stund.`;
+                    }
+                    setChatMessages(prev => [...prev, { role: 'assistant', text: userFriendlyMsg }]);
                 } finally {
                     setIsChatLoading(false);
                 }
