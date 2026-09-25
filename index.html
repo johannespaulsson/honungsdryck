@@ -629,8 +629,8 @@
             };
 
             const handleSendChatMessage = async (customText = null) => {
-                const textToSend = customText || chatInput;
-                if (!textToSend.trim() || isChatLoading) return;
+                const textToSend = (customText || chatInput || '').trim();
+                if (!textToSend || isChatLoading) return;
                 
                 if (!geminiApiKey) {
                     setShowChatSettings(true);
@@ -638,8 +638,9 @@
                     return;
                 }
                 
-                const newMessages = [...chatMessages, { role: 'user', text: textToSend }];
-                setChatMessages(newMessages);
+                const userMsg = { role: 'user', text: textToSend };
+                const updatedMessages = [...chatMessages, userMsg];
+                setChatMessages(updatedMessages);
                 setChatInput('');
                 setIsChatLoading(true);
                 
@@ -671,31 +672,46 @@ ${activeBatchText}
 
 Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använd INTE komplex markdown utöver fetstil eller punktlistor.`;
 
-                    // Gemini API kräver att första meddelandet i contents är 'user'
-                    let rawHistory = newMessages.slice(-10).map((msg) => ({
-                        role: msg.role === 'user' ? 'user' : 'model',
-                        parts: [{ text: msg.text }]
-                    }));
-
-                    while (rawHistory.length > 0 && rawHistory[0].role !== 'user') {
-                        rawHistory.shift();
-                    }
-
-                    if (rawHistory.length === 0) {
-                        rawHistory = [{ role: 'user', parts: [{ text: textToSend }] }];
-                    }
-
-                    // Sammanfoga eventuella intilliggande meddelanden med samma roll
-                    const mergedHistory = [];
-                    for (const msg of rawHistory) {
-                        if (mergedHistory.length > 0 && mergedHistory[mergedHistory.length - 1].role === msg.role) {
-                            mergedHistory[mergedHistory.length - 1].parts[0].text += "\n" + msg.parts[0].text;
+                    // Bygg en ren och korrekt samtalsstruktur för Gemini API
+                    const historyTurns = [];
+                    for (const msg of updatedMessages) {
+                        const txt = (msg.text || '').trim();
+                        // Hoppa över system/felmeddelanden och tomma meddelanden
+                        if (!txt || txt.startsWith('Hoppsan, något gick fel') || txt.startsWith('Ogiltig API-nyckel') || txt.startsWith('Kvotgränsen har')) {
+                            continue;
+                        }
+                        const role = msg.role === 'user' ? 'user' : 'model';
+                        
+                        // Slå ihop om två efterföljande har samma roll
+                        if (historyTurns.length > 0 && historyTurns[historyTurns.length - 1].role === role) {
+                            historyTurns[historyTurns.length - 1].parts[0].text += "\n\n" + txt;
                         } else {
-                            mergedHistory.push({ role: msg.role, parts: [{ text: msg.parts[0].text }] });
+                            historyTurns.push({ role, parts: [{ text: txt }] });
                         }
                     }
 
-                    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+                    // Se till att historiken alltid börjar med ett 'user'-meddelande
+                    while (historyTurns.length > 0 && historyTurns[0].role !== 'user') {
+                        historyTurns.shift();
+                    }
+
+                    // Se till att historiken alltid slutar med ett 'user'-meddelande
+                    while (historyTurns.length > 0 && historyTurns[historyTurns.length - 1].role !== 'user') {
+                        historyTurns.pop();
+                    }
+
+                    // Fallback om historiken blev tom
+                    if (historyTurns.length === 0) {
+                        historyTurns.push({ role: 'user', parts: [{ text: textToSend }] });
+                    }
+
+                    // Begränsa till de senaste 8 turerna för snabbhet och kvotbesparing
+                    let finalContents = historyTurns.slice(-8);
+                    while (finalContents.length > 0 && finalContents[0].role !== 'user') {
+                        finalContents.shift();
+                    }
+
+                    const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
                     let lastError = null;
                     let successData = null;
 
@@ -710,9 +726,9 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                                     system_instruction: {
                                         parts: [{ text: systemInstruction }]
                                     },
-                                    contents: mergedHistory,
+                                    contents: finalContents,
                                     generationConfig: {
-                                        maxOutputTokens: 4096,
+                                        maxOutputTokens: 2048,
                                         temperature: 0.7
                                     }
                                 })
@@ -721,18 +737,19 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                             if (!response.ok) {
                                 const errData = await response.json().catch(() => ({}));
                                 const errMsg = errData.error?.message || `HTTP ${response.status}`;
-                                if (response.status === 404 || errMsg.includes('not found')) {
-                                    lastError = new Error(errMsg);
-                                    continue; // Prova nästa modell
+                                lastError = new Error(errMsg);
+                                console.warn(`Modellförsök (${model}) misslyckades:`, errMsg);
+                                if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('key not valid')) {
+                                    throw lastError;
                                 }
-                                throw new Error(errMsg);
+                                continue; // Prova nästa modell i fallbacks
                             }
 
                             successData = await response.json();
-                            break; // Lyckades!
+                            break; // Framgångsrikt anrop!
                         } catch (err) {
                             lastError = err;
-                            if (err.message && !err.message.includes('not found') && !err.message.includes('404')) {
+                            if (err.message && (err.message.includes('API_KEY_INVALID') || err.message.includes('key not valid'))) {
                                 throw err;
                             }
                         }
@@ -742,13 +759,25 @@ Svara tydligt och pedagogiskt. Använd gärna punktlistor för tydlighet. Använ
                         throw lastError;
                     }
 
-                    const aiText = successData?.candidates?.[0]?.content?.parts?.[0]?.text || "Hittade inget svar. Försök igen.";
+                    const candidate = successData?.candidates?.[0];
+                    let aiText = '';
+                    if (candidate?.content?.parts) {
+                        aiText = candidate.content.parts
+                            .map(p => p.text || '')
+                            .filter(Boolean)
+                            .join('\n')
+                            .trim();
+                    }
+                    if (!aiText) {
+                        aiText = "Kunde inte generera något svar just nu. Försök gärna igen.";
+                    }
+
                     setChatMessages(prev => [...prev, { role: 'assistant', text: aiText }]);
 
                 } catch (e) {
                     console.error("AI Fel:", e);
                     let userFriendlyMsg = `Hoppsan, något gick fel vid anropet till AI:n (${e.message}).`;
-                    if (e.message.includes('API_KEY_INVALID') || e.message.includes('key not valid') || e.message.includes('400')) {
+                    if (e.message.includes('API_KEY_INVALID') || e.message.includes('key not valid')) {
                         userFriendlyMsg = `Ogiltig API-nyckel. Kontrollera din nyckel under inställningarna (klicka på skiftnyckeln 🔧 i chatten).`;
                     } else if (e.message.includes('RESOURCE_EXHAUSTED') || e.message.includes('429')) {
                         userFriendlyMsg = `Kvotgränsen har nåtts för din API-nyckel hos Google. Försök igen om en liten stund.`;
